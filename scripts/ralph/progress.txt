@@ -399,3 +399,22 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - Graceful fallback pattern: check bvAvailable flag, call super.getNextTask() on any failure
   - Async triage refresh with `void this.refreshTriage()` keeps CRUD operations fast
 ---
+
+## 2026-01-11 - ralph-tui-45r.6
+- What was implemented:
+  - Full ClaudeAgentPlugin implementing AgentPlugin interface
+  - detect(): Uses `which` to find claude binary, then runs --version to verify
+  - buildArgs(): Constructs CLI args with --print, --output-format, --model, --dangerously-skip-permissions
+  - File context support via --add-dir flag for directories containing specified files
+  - Setup questions for printMode (text/json/stream), model (sonnet/opus/haiku), skipPermissions (boolean)
+  - Configurable timeout inherited from BaseAgentPlugin (defaults to 0 = no timeout)
+  - Validation for printMode and model config values
+- Files changed:
+  - src/plugins/agents/builtin/claude.ts (updated from stub to full implementation)
+- **Learnings:**
+  - Claude Code CLI uses --print for non-interactive mode (not -p shorthand in code, but --print)
+  - The --dangerously-skip-permissions flag enables autonomous operation without user confirmation
+  - Using `which` for binary detection is more reliable than just trying to execute --version
+  - File context via --add-dir adds directories to Claude's working context, not individual files
+  - The base class already handles SIGTERM/SIGKILL escalation for timeout - just set defaultTimeout
+---
