@@ -1171,3 +1171,29 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - bv's default behavior (no recipe filter) is often sufficient for task selection
   - getSetupQuestions() can simply delegate to parent when no plugin-specific config is needed
 ---
+
+## 2026-01-11 - ralph-tui-45r.47
+- What was implemented:
+  - BUG: Tasks stuck in_progress when TUI killed or crashes
+  - Added activeTaskIds field to PersistedSessionState for session-owned task tracking
+  - Added task:activated event emitted when task status is changed to in_progress
+  - Track active tasks via task:activated events in both TUI and headless modes
+  - On graceful shutdown, reset active in_progress tasks back to open status
+  - Added detectAndHandleStaleTasks() function for startup detection of stale tasks
+  - On startup, prompt user to reset orphaned in_progress tasks from crashed sessions
+  - In headless mode, auto-reset stale tasks without prompting
+  - Added helper functions: addActiveTask, removeActiveTask, clearActiveTasks, getActiveTasks
+  - Added resetTasksToOpen() and getTracker() methods to ExecutionEngine
+- Files changed:
+  - src/session/persistence.ts (updated) - activeTaskIds field, helper functions
+  - src/session/index.ts (updated) - Export new functions
+  - src/engine/types.ts (updated) - TaskActivatedEvent type
+  - src/engine/index.ts (updated) - Emit task:activated, resetTasksToOpen(), getTracker()
+  - src/commands/run.tsx (updated) - Track active tasks, reset on shutdown, detect stale on startup
+- **Learnings:**
+  - Session ownership of in_progress tasks enables crash recovery without external state
+  - Tracking active tasks in the session file provides persistence across restarts
+  - The task:activated event decouples the engine from session management
+  - Stale detection requires checking both session file AND lock status (lock may be stale)
+  - Headless mode should auto-handle recovery without user prompts for CI/automation
+---
