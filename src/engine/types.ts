@@ -112,9 +112,9 @@ export interface EngineStartedEvent extends EngineEventBase {
   type: 'engine:started';
   /** Session ID */
   sessionId: string;
-  /** Total tasks available */
+  /** Total tasks available (open and in_progress only, not closed) */
   totalTasks: number;
-  /** All tasks to be displayed (open and in_progress) */
+  /** All tasks to be displayed (open, in_progress, and completed for historical view) */
   tasks: TrackerTask[];
 }
 

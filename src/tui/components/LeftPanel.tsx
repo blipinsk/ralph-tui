@@ -20,6 +20,7 @@ function truncateText(text: string, maxWidth: number): string {
 /**
  * Single task item row
  * Shows: [status indicator] [task ID] [task title (truncated)]
+ * Closed tasks are displayed with greyed-out styling to distinguish historical work
  */
 function TaskRow({
   task,
@@ -33,12 +34,21 @@ function TaskRow({
 }): ReactNode {
   const statusColor = getTaskStatusColor(task.status);
   const statusIndicator = getTaskStatusIndicator(task.status);
+  const isClosed = task.status === 'closed';
 
   // Format: "✓ task-id title"
   // Calculate available width: maxWidth - indicator(1) - space(1) - id - space(1)
   const idDisplay = task.id;
   const titleWidth = maxWidth - 3 - idDisplay.length;
   const truncatedTitle = truncateText(task.title, Math.max(5, titleWidth));
+
+  // Greyed-out colors for closed tasks
+  const idColor = isClosed ? colors.fg.dim : colors.fg.muted;
+  const titleColor = isClosed
+    ? colors.fg.dim
+    : isSelected
+      ? colors.fg.primary
+      : colors.fg.secondary;
 
   return (
     <box
@@ -52,8 +62,8 @@ function TaskRow({
     >
       <text>
         <span fg={statusColor}>{statusIndicator}</span>
-        <span fg={colors.fg.muted}> {idDisplay}</span>
-        <span fg={isSelected ? colors.fg.primary : colors.fg.secondary}> {truncatedTitle}</span>
+        <span fg={idColor}> {idDisplay}</span>
+        <span fg={titleColor}> {truncatedTitle}</span>
       </text>
     </box>
   );

@@ -178,14 +178,17 @@ export class ExecutionEngine {
     this.state.startedAt = new Date().toISOString();
     this.shouldStop = false;
 
-    // Fetch initial tasks to include in started event
-    const initialTasks = await this.tracker.getTasks({ status: ['open', 'in_progress'] });
+    // Fetch all tasks including completed for TUI display
+    // Open/in_progress tasks are actionable; completed tasks are for historical view
+    const initialTasks = await this.tracker.getTasks({
+      status: ['open', 'in_progress', 'completed'],
+    });
 
     this.emit({
       type: 'engine:started',
       timestamp: new Date().toISOString(),
       sessionId: '',
-      totalTasks: this.state.totalTasks,
+      totalTasks: this.state.totalTasks, // Only counts open/in_progress
       tasks: initialTasks,
     });
 

@@ -37,6 +37,7 @@ export const colors = {
     active: '#7aa2f7',
     pending: '#565f89',
     blocked: '#f7768e',
+    closed: '#414868', // Greyed out for completed/closed tasks
   },
 
   // Accent colors
@@ -56,7 +57,7 @@ export const colors = {
 
 /**
  * Status indicator symbols
- * Task status: ✓ (done), ▶ (active), ○ (pending), ⊘ (blocked)
+ * Task status: ✓ (done), ▶ (active), ○ (pending), ⊘ (blocked), ✓ (closed - greyed)
  * Ralph status: ▶ (running), ◎ (pausing), ⏸ (paused), ■ (stopped), ✓ (complete), ○ (idle)
  */
 export const statusIndicators = {
@@ -64,6 +65,7 @@ export const statusIndicators = {
   active: '▶',
   pending: '○',
   blocked: '⊘',
+  closed: '✓', // Same indicator as done, but will be greyed out
   running: '▶',
   pausing: '◎',
   paused: '⏸',
@@ -79,6 +81,7 @@ export const keyboardShortcuts = [
   { key: 'q', description: 'Quit' },
   { key: 'p', description: 'Pause/Resume' },
   { key: 'd', description: 'Dashboard' },
+  { key: 'h', description: 'Hide/Show Closed' },
   { key: '↑↓', description: 'Navigate' },
   { key: '?', description: 'Help' },
 ] as const;
@@ -92,6 +95,7 @@ export const fullKeyboardShortcuts = [
   { key: 'Esc', description: 'Go back / Cancel', category: 'General' },
   { key: 'p', description: 'Pause / Resume execution', category: 'Execution' },
   { key: 'd', description: 'Toggle progress dashboard', category: 'Views' },
+  { key: 'h', description: 'Toggle show/hide closed tasks', category: 'Views' },
   { key: 'i', description: 'Toggle iterations / tasks view', category: 'Views' },
   { key: 't', description: 'Switch to tasks view', category: 'Views' },
   { key: '↑ / k', description: 'Move selection up', category: 'Navigation' },
@@ -139,8 +143,13 @@ export type RalphStatus = 'running' | 'pausing' | 'paused' | 'stopped' | 'comple
 
 /**
  * Task status types matching the acceptance criteria
+ * - 'done': Task completed in current session (green checkmark)
+ * - 'active': Task currently being worked on (blue arrow)
+ * - 'pending': Task waiting to be worked on (grey circle)
+ * - 'blocked': Task blocked by dependencies (red symbol)
+ * - 'closed': Previously completed task (greyed out checkmark for historical tasks)
  */
-export type TaskStatus = 'done' | 'active' | 'pending' | 'blocked';
+export type TaskStatus = 'done' | 'active' | 'pending' | 'blocked' | 'closed';
 
 /**
  * Get the color for a given task status

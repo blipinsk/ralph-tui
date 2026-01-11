@@ -6,7 +6,7 @@
 
 import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import type { ReactNode } from 'react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { colors, layout } from '../theme.js';
 import type { RalphStatus, TaskStatus } from '../theme.js';
 import type { TaskItem } from '../types.js';
@@ -54,7 +54,9 @@ export interface RunAppProps {
 
 /**
  * Convert tracker status to TUI task status.
- * Maps: open -> pending, in_progress -> active, completed -> done, etc.
+ * Maps: open -> pending, in_progress -> active, completed -> closed (greyed out), etc.
+ * Note: 'done' status is used for tasks completed in the current session (green checkmark),
+ * while 'closed' is for previously completed tasks (greyed out for historical view).
  */
 function trackerStatusToTaskStatus(trackerStatus: string): TaskStatus {
   switch (trackerStatus) {
@@ -63,11 +65,11 @@ function trackerStatusToTaskStatus(trackerStatus: string): TaskStatus {
     case 'in_progress':
       return 'active';
     case 'completed':
-      return 'done';
+      return 'closed'; // Greyed out for historical/previously completed tasks
     case 'blocked':
       return 'blocked';
     case 'cancelled':
-      return 'done'; // Show cancelled as done (finished state)
+      return 'closed'; // Show cancelled as closed (greyed out finished state)
     default:
       return 'pending';
   }
@@ -130,6 +132,22 @@ export function RunApp({
   const [detailIteration, setDetailIteration] = useState<IterationResult | null>(null);
   // Help overlay state
   const [showHelp, setShowHelp] = useState(false);
+  // Show/hide closed tasks filter (default: show closed tasks)
+  const [showClosedTasks, setShowClosedTasks] = useState(true);
+
+  // Filter tasks for display (optionally hide closed tasks)
+  // This is computed early so keyboard handlers can use displayedTasks.length
+  const displayedTasks = useMemo(
+    () => (showClosedTasks ? tasks : tasks.filter((t) => t.status !== 'closed')),
+    [tasks, showClosedTasks]
+  );
+
+  // Clamp selectedIndex when displayedTasks shrinks (e.g., when hiding closed tasks)
+  useEffect(() => {
+    if (displayedTasks.length > 0 && selectedIndex >= displayedTasks.length) {
+      setSelectedIndex(displayedTasks.length - 1);
+    }
+  }, [displayedTasks.length, selectedIndex]);
 
   // Subscribe to engine events
   useEffect(() => {
@@ -328,7 +346,7 @@ export function RunApp({
         case 'down':
         case 'j':
           if (viewMode === 'tasks') {
-            setSelectedIndex((prev) => Math.min(tasks.length - 1, prev + 1));
+            setSelectedIndex((prev) => Math.min(displayedTasks.length - 1, prev + 1));
           } else if (viewMode === 'iterations') {
             setIterationSelectedIndex((prev) => Math.min(iterationHistoryLength - 1, prev + 1));
           }
@@ -379,6 +397,11 @@ export function RunApp({
           setShowDashboard((prev) => !prev);
           break;
 
+        case 'h':
+          // Toggle show/hide closed tasks
+          setShowClosedTasks((prev) => !prev);
+          break;
+
         case '?':
           // Show help overlay
           setShowHelp(true);
@@ -387,11 +410,11 @@ export function RunApp({
         case 'return':
         case 'enter':
           if (viewMode === 'tasks') {
-            // Drill into selected task details
-            if (tasks[selectedIndex]) {
-              setDetailTask(tasks[selectedIndex]);
+            // Drill into selected task details (use displayedTasks for filtered list)
+            if (displayedTasks[selectedIndex]) {
+              setDetailTask(displayedTasks[selectedIndex]);
               setViewMode('task-detail');
-              onTaskDrillDown?.(tasks[selectedIndex]);
+              onTaskDrillDown?.(displayedTasks[selectedIndex]);
             }
           } else if (viewMode === 'iterations') {
             // Drill into selected iteration details
@@ -405,7 +428,7 @@ export function RunApp({
           break;
       }
     },
-    [tasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp]
+    [displayedTasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp]
   );
 
   useKeyboard(handleKeyboard);
@@ -417,13 +440,16 @@ export function RunApp({
   );
   const isCompact = width < 80;
 
-  // Calculate progress
-  const completedTasks = tasks.filter((t) => t.status === 'done').length;
+  // Calculate progress (counting both 'done' and 'closed' as completed)
+  // 'done' = completed in current session, 'closed' = historically completed
+  const completedTasks = tasks.filter(
+    (t) => t.status === 'done' || t.status === 'closed'
+  ).length;
   const totalTasks = tasks.length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  // Get selected task
-  const selectedTask = tasks[selectedIndex] ?? null;
+  // Get selected task from filtered list
+  const selectedTask = displayedTasks[selectedIndex] ?? null;
 
   return (
     <box
@@ -487,7 +513,7 @@ export function RunApp({
           />
         ) : viewMode === 'tasks' ? (
           <>
-            <LeftPanel tasks={tasks} selectedIndex={selectedIndex} />
+            <LeftPanel tasks={displayedTasks} selectedIndex={selectedIndex} />
             <RightPanel
               selectedTask={selectedTask}
               currentIteration={currentIteration}
