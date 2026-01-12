@@ -61,7 +61,7 @@ export interface RunAppProps {
   onInterruptCancel?: () => void;
   /** Initial tasks to display before engine starts */
   initialTasks?: TrackerTask[];
-  /** Callback when user wants to start the engine (Enter/s in ready state) */
+  /** Callback when user wants to start the engine (s key in ready state) */
   onStart?: () => Promise<void>;
   /** Current stored configuration (for settings view) */
   storedConfig?: StoredConfig;
@@ -637,13 +637,7 @@ export function RunApp({
 
         case 'return':
         case 'enter':
-          // When in ready state, Enter starts the execution
-          if (status === 'ready' && onStart) {
-            setStatus('running');
-            onStart();
-            break;
-          }
-
+          // Enter drills into details (does NOT start execution - use 's' for that)
           if (viewMode === 'tasks') {
             // Drill into selected task details (use displayedTasks for filtered list)
             if (displayedTasks[selectedIndex]) {

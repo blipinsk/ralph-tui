@@ -84,7 +84,7 @@ export const statusIndicators = {
  */
 export const keyboardShortcuts = [
   { key: 'q', description: 'Quit' },
-  { key: 'Enter', description: 'Start' },
+  { key: 's', description: 'Start' },
   { key: 'p', description: 'Pause/Resume' },
   { key: 'r', description: 'Refresh' },
   { key: 'l', description: 'Load Epic' },
@@ -102,7 +102,7 @@ export const fullKeyboardShortcuts = [
   { key: 'q', description: 'Quit Ralph', category: 'General' },
   { key: 'Esc', description: 'Go back / Cancel', category: 'General' },
   { key: ',', description: 'Open settings', category: 'General' },
-  { key: 'Enter/s', description: 'Start execution (when ready)', category: 'Execution' },
+  { key: 's', description: 'Start execution (when ready)', category: 'Execution' },
   { key: 'p', description: 'Pause / Resume execution', category: 'Execution' },
   { key: 'r', description: 'Refresh task list from tracker', category: 'Execution' },
   { key: 'l', description: 'Load / switch epic', category: 'Execution' },
