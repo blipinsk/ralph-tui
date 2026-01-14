@@ -316,7 +316,11 @@ export function RunApp({
   });
   const [currentOutput, setCurrentOutput] = useState('');
   // Streaming parser for live output - extracts readable content and prevents memory bloat
-  const outputParserRef = useRef(new StreamingOutputParser());
+  const outputParserRef = useRef(
+    new StreamingOutputParser({
+      agentPlugin: storedConfig?.defaultAgent || storedConfig?.agent || 'claude',
+    })
+  );
   const [elapsedTime, setElapsedTime] = useState(0);
   const [epicName] = useState('Ralph');
   // Derive agent/tracker names from config - these are displayed in the header

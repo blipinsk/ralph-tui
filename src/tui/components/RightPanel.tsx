@@ -567,7 +567,7 @@ function TaskOutputView({
       return iterationOutput;
     }
     // For completed output (historical or from current session), parse to extract readable content
-    return parseAgentOutput(iterationOutput);
+    return parseAgentOutput(iterationOutput, agentName);
   }, [iterationOutput, iterationTiming?.isRunning]);
 
   // Parse model info for display

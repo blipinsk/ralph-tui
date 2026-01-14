@@ -11,6 +11,7 @@ export interface DroidCommandArgs {
   model?: string;
   reasoningEffort?: string;
   skipPermissions?: boolean;
+  enableTracing?: boolean;
 }
 
 export function buildDroidCommandArgs({
@@ -19,6 +20,7 @@ export function buildDroidCommandArgs({
   model,
   reasoningEffort,
   skipPermissions,
+  enableTracing,
 }: DroidCommandArgs): string[] {
   const args: string[] = [...DROID_NON_INTERACTIVE_FLAGS];
 
@@ -32,6 +34,10 @@ export function buildDroidCommandArgs({
 
   if (skipPermissions) {
     args.push('--skip-permissions-unsafe');
+  }
+
+  if (enableTracing) {
+    args.push('--output-format', 'stream-json');
   }
 
   args.push(prompt, '--cwd', cwd);

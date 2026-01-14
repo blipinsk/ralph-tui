@@ -25,12 +25,14 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
     supportsStreaming: true,
     supportsInterrupt: true,
     supportsFileContext: false,
-    supportsSubagentTracing: false,
+    supportsSubagentTracing: true,
+    structuredOutputFormat: 'jsonl',
   };
 
   private model?: string;
   private reasoningEffort?: DroidReasoningEffort;
   private skipPermissions = false;
+  private enableTracing = true;
 
   override async initialize(config: Record<string, unknown>): Promise<void> {
     await super.initialize(config);
@@ -39,6 +41,7 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
       model: config.model,
       reasoningEffort: config.reasoningEffort,
       skipPermissions: config.skipPermissions,
+      enableTracing: config.enableTracing,
     });
 
     if (!parsed.success) {
@@ -57,6 +60,11 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
     if (this.skipPermissions) {
       console.warn('[droid] Skip permissions mode enabled; running with --skip-permissions-unsafe');
     }
+
+    this.enableTracing = parsed.data.enableTracing;
+    if (!this.enableTracing) {
+      this.meta.supportsSubagentTracing = false;
+    }
   }
 
   protected buildArgs(
@@ -71,6 +79,7 @@ export class DroidAgentPlugin extends BaseAgentPlugin {
       model: this.model,
       reasoningEffort: this.reasoningEffort,
       skipPermissions: this.skipPermissions,
+      enableTracing: this.enableTracing && options?.subagentTracing === true,
     });
   }
 }
