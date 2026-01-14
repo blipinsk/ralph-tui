@@ -214,6 +214,30 @@ function Blockquote({ children, ...props }: React.HTMLAttributes<HTMLQuoteElemen
 }
 
 /**
+ * Recursively extracts text content from React children.
+ * Handles syntax-highlighted code where children are nested spans.
+ */
+function extractTextContent(node: unknown): string {
+  if (typeof node === 'string') {
+    return node;
+  }
+  if (typeof node === 'number') {
+    return String(node);
+  }
+  if (node == null || typeof node === 'boolean') {
+    return '';
+  }
+  if (Array.isArray(node)) {
+    return node.map(extractTextContent).join('');
+  }
+  if (typeof node === 'object' && 'props' in node) {
+    const element = node as { props: { children?: unknown } };
+    return extractTextContent(element.props.children);
+  }
+  return '';
+}
+
+/**
  * Custom code block wrapper for syntax-highlighted code.
  * Works with rehype-pretty-code output.
  */
@@ -232,15 +256,10 @@ function Pre({
       ? (children as { props: { className: string } }).props.className.match(/language-(\w+)/)?.[1]
       : undefined);
 
-  // Get raw code for copy functionality
+  // Get raw code for copy functionality - extract text from React tree
   const rawCode =
     (props as { raw?: string }).raw ||
-    (typeof children === 'object' &&
-    children !== null &&
-    'props' in children &&
-    'children' in (children as { props: { children?: unknown } }).props
-      ? String((children as { props: { children: unknown } }).props.children || '')
-      : '');
+    extractTextContent(children);
 
   return (
     <CodeBlock language={dataLanguage} code={rawCode} className="my-6">
