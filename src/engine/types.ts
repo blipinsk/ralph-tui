@@ -196,6 +196,7 @@ export type EngineEventType =
   | 'engine:paused'
   | 'engine:resumed'
   | 'engine:iterations-added'
+  | 'engine:iterations-removed'
   | 'iteration:started'
   | 'iteration:completed'
   | 'iteration:failed'
@@ -279,6 +280,21 @@ export interface IterationsAddedEvent extends EngineEventBase {
   /** Previous maxIterations value */
   previousMax: number;
   /** Current iteration at time of addition */
+  currentIteration: number;
+}
+
+/**
+ * Iterations removed event - emitted when maxIterations is decreased at runtime
+ */
+export interface IterationsRemovedEvent extends EngineEventBase {
+  type: 'engine:iterations-removed';
+  /** Number of iterations removed */
+  removed: number;
+  /** New maxIterations value */
+  newMax: number;
+  /** Previous maxIterations value */
+  previousMax: number;
+  /** Current iteration at time of removal */
   currentIteration: number;
 }
 
@@ -495,6 +511,7 @@ export type EngineEvent =
   | EnginePausedEvent
   | EngineResumedEvent
   | IterationsAddedEvent
+  | IterationsRemovedEvent
   | IterationStartedEvent
   | IterationCompletedEvent
   | IterationFailedEvent

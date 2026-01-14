@@ -828,6 +828,16 @@ export function RunApp({
           }
           break;
 
+        case '-':
+          // Remove 10 iterations from maxIterations (but not below 1 or current iteration)
+          if (status === 'ready' || status === 'paused' || status === 'stopped' || status === 'idle') {
+            engine.removeIterations(10).catch((err) => {
+              // Surface iteration removal errors to user
+              console.error('Failed to remove iterations:', err);
+            });
+          }
+          break;
+
         case ',':
           // Open settings view (comma key, like many text editors)
           if (storedConfig && onSaveSettings) {

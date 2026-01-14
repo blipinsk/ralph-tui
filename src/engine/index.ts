@@ -1077,6 +1077,51 @@ export class ExecutionEngine {
   }
 
   /**
+   * Remove iterations from maxIterations at runtime.
+   * Useful for limiting a session that's running longer than expected.
+   * @param count - Number of iterations to remove (must be positive)
+   * @returns true if successful, false if removal would go below 1 or current iteration
+   */
+  async removeIterations(count: number): Promise<boolean> {
+    if (count <= 0) {
+      return false;
+    }
+
+    const previousMax = this.config.maxIterations;
+    // Handle unlimited case (0 means unlimited) - cannot reduce unlimited
+    if (previousMax === 0) {
+      return false;
+    }
+
+    // Calculate new max, but don't go below 1 or current iteration
+    const minAllowed = Math.max(1, this.state.currentIteration);
+    const newMax = Math.max(minAllowed, previousMax - count);
+
+    // Check if we actually made a change
+    if (newMax === previousMax) {
+      return false;
+    }
+
+    // Update config
+    this.config.maxIterations = newMax;
+
+    // Persist to session
+    await updateSessionMaxIterations(this.config.cwd, newMax);
+
+    // Emit event
+    this.emit({
+      type: 'engine:iterations-removed',
+      timestamp: new Date().toISOString(),
+      removed: previousMax - newMax,
+      newMax,
+      previousMax,
+      currentIteration: this.state.currentIteration,
+    });
+
+    return true;
+  }
+
+  /**
    * Continue execution after adding more iterations.
    * Call this after addIterations() returns true.
    */
