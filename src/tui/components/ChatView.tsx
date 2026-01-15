@@ -186,8 +186,12 @@ export function ChatView({
         return;
       }
 
-      // Check for Ctrl+J or Shift+Enter - allow default behavior (newline)
-      // These don't need special handling, just let them through
+      // Shift+Enter or Ctrl+J = insert newline
+      if ((key.shift && key.name === 'return') || (key.ctrl && key.name === 'j')) {
+        key.preventDefault?.();
+        textarea.newLine();
+        return;
+      }
 
       // === Option + Arrow Keys (word navigation) ===
       if (key.option && !key.shift && !key.meta && !key.ctrl) {
