@@ -334,7 +334,7 @@ export interface IterationFailedEvent extends EngineEventBase {
   /** Task that failed */
   task: TrackerTask;
   /** Action that will be taken */
-  action: 'retry' | 'skip' | 'abort';
+  action: 'retry' | 'skip' | 'abort' | 'blocked';
 }
 
 /**

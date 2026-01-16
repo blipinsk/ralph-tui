@@ -570,6 +570,25 @@ export class ExecutionEngine {
     // Handle failure according to strategy
     const errorMessage = result.error ?? 'Unknown error';
 
+    // Check if this is a blocked task - blocked tasks should NOT go through
+    // skip/retry logic as they have their own separate state management.
+    // A blocked task is already tracked in blockedTasks map and should not
+    // be added to skippedTasks or retried.
+    const isBlockedTask = errorMessage.startsWith('Blocked:');
+    if (isBlockedTask) {
+      // Emit failed event but with no retry/skip action - just blocked status
+      this.emit({
+        type: 'iteration:failed',
+        timestamp: new Date().toISOString(),
+        iteration: this.state.currentIteration,
+        error: errorMessage,
+        task,
+        action: 'blocked',
+      });
+      // Return immediately - do not apply retry/skip/abort logic
+      return result;
+    }
+
     switch (errorConfig.strategy) {
       case 'retry': {
         const currentRetries = this.retryCountMap.get(task.id) ?? 0;
