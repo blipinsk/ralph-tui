@@ -214,7 +214,7 @@ describe('PermissionDenialDetector', () => {
     });
 
     describe('agent filtering', () => {
-      test('only checks Claude agent', () => {
+      test('ignores non-Claude agents', () => {
         // given -> no additional preconditions
 
         // when
@@ -246,6 +246,58 @@ describe('PermissionDenialDetector', () => {
         // when
         const result = detector.detect({
           stdout: 'Claude wants to run: git push',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(true);
+      });
+
+      test('recognizes claude-code as Claude agent (case-insensitive)', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'Claude wants to run: git push',
+          agentId: 'claude-code',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(true);
+      });
+
+      test('recognizes Claude-3 as Claude agent (case-insensitive)', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'Claude wants to run: git push',
+          agentId: 'Claude-3',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(true);
+      });
+
+      test('recognizes CLAUDE_AGENT as Claude agent (case-insensitive)', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'Claude wants to run: git push',
+          agentId: 'CLAUDE_AGENT',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(true);
+      });
+
+      test('recognizes my-claude-bot as Claude agent', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'Claude wants to run: git push',
+          agentId: 'my-claude-bot',
         });
 
         // then
@@ -301,6 +353,78 @@ describe('PermissionDenialDetector', () => {
         // then
         expect(result.isBlocked).toBe(false);
       });
+
+      test('does not trigger for past-tense "was waiting for permission"', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'The agent was waiting for permission earlier',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
+
+      test('does not trigger for past-tense "were waiting for permission"', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'The processes were waiting for permission to proceed',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
+
+      test('does not trigger for past-tense "had been waiting for approval"', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'It had been waiting for approval before timing out',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
+
+      test('does not trigger for past-tense "was waiting for input"', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'The process was waiting for input when it crashed',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
+
+      test('does not trigger for mid-sentence Claude mentions', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'I noticed that Claude wants to run commands often',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
+
+      test('does not trigger for quoted text about Claude wanting to run', () => {
+        // given -> no additional preconditions
+
+        // when
+        const result = detector.detect({
+          stdout: 'The user said "Claude wants to run" but that was just an example',
+        });
+
+        // then
+        expect(result.isBlocked).toBe(false);
+      });
     });
 
     describe('blocked indicator patterns', () => {
@@ -343,12 +467,12 @@ describe('PermissionDenialDetector', () => {
     });
 
     describe('message extraction', () => {
-      test('extracts message around matched pattern', () => {
+      test('extracts message around matched pattern at line start', () => {
         // given -> no additional preconditions
 
         // when
         const result = detector.detect({
-          stdout: 'Some prefix. Claude wants to run: git commit -m "test". Some suffix.',
+          stdout: 'Some prefix.\nClaude wants to run: git commit -m "test"\nSome suffix.',
         });
 
         // then
@@ -357,8 +481,8 @@ describe('PermissionDenialDetector', () => {
       });
 
       test('truncates very long messages', () => {
-        // given
-        const longOutput = 'A'.repeat(100) + ' Claude wants to run: git push ' + 'B'.repeat(200);
+        // given - Claude wants to run must be at start of line for detection
+        const longOutput = 'A'.repeat(100) + '\nClaude wants to run: git push ' + 'B'.repeat(200);
 
         // when
         const result = detector.detect({

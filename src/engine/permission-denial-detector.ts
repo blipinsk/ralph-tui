@@ -55,32 +55,39 @@ interface PermissionPattern {
 /**
  * Permission denial patterns for Claude Code.
  * These match the output when Claude is requesting permission for an operation.
+ *
+ * Pattern design notes:
+ * - Use word boundaries (\b) to avoid matching mid-word
+ * - Use negative lookbehind for past-tense exclusion (was/were/had been)
+ * - Use line-start anchors (^) where appropriate for message boundaries
  */
 const PERMISSION_PATTERNS: PermissionPattern[] = [
   // Bash command permission request
   // Claude outputs: "Claude wants to run: <command>"
+  // Uses ^ anchor to match at line/message start
   {
-    pattern: /Claude wants to (?:run|execute)[:\s]+(.+)/i,
+    pattern: /^Claude wants to (?:run|execute)[:\s]+(.+)/im,
     operationName: 'bash command',
-    commandPattern: /Claude wants to (?:run|execute)[:\s]+(.+)/i,
+    commandPattern: /^Claude wants to (?:run|execute)[:\s]+(.+)/im,
   },
   // File write permission
   // Claude outputs: "Claude wants to write to: <path>"
   {
-    pattern: /Claude wants to (?:write|create|modify)(?: to)?[:\s]+(.+)/i,
+    pattern: /^Claude wants to (?:write|create|modify)(?: to)?[:\s]+(.+)/im,
     operationName: 'file modification',
-    commandPattern: /Claude wants to (?:write|create|modify)(?: to)?[:\s]+(.+)/i,
+    commandPattern: /^Claude wants to (?:write|create|modify)(?: to)?[:\s]+(.+)/im,
   },
   // Edit file permission
   // Claude outputs: "Claude wants to edit: <path>"
   {
-    pattern: /Claude wants to edit[:\s]+(.+)/i,
+    pattern: /^Claude wants to edit[:\s]+(.+)/im,
     operationName: 'file edit',
-    commandPattern: /Claude wants to edit[:\s]+(.+)/i,
+    commandPattern: /^Claude wants to edit[:\s]+(.+)/im,
   },
   // Generic permission request format
+  // Negative lookbehind excludes past-tense phrases like "was waiting", "were waiting", "had been waiting"
   {
-    pattern: /waiting for (?:user )?(?:permission|approval)/i,
+    pattern: /(?<!was\s)(?<!were\s)(?<!been\s)\bwaiting for (?:user )?(?:permission|approval)\b/i,
     operationName: 'operation',
   },
   // Permission prompt indicators in JSONL output
@@ -89,13 +96,14 @@ const PERMISSION_PATTERNS: PermissionPattern[] = [
     operationName: 'permission request',
   },
   // User input required indicator
+  // Negative lookbehind excludes past-tense like "required" when preceded by context indicating past
   {
-    pattern: /requires? (?:user )?(?:input|confirmation|approval)/i,
+    pattern: /(?<!previously\s)(?<!already\s)\brequires? (?:user )?(?:input|confirmation|approval)\b/i,
     operationName: 'user confirmation',
   },
   // Git operations that commonly require permission
   {
-    pattern: /(?:git (?:commit|push|pull|merge|rebase).*?requires?|permission.*?git)/i,
+    pattern: /(?:git (?:commit|push|pull|merge|rebase).*?\brequires?\b|permission.*?git)/i,
     operationName: 'git operation',
   },
   // Interactive prompt detected
@@ -108,12 +116,13 @@ const PERMISSION_PATTERNS: PermissionPattern[] = [
 /**
  * Patterns that indicate the agent is blocked waiting for input.
  * These are more generic indicators that execution has stalled.
+ * Uses negative lookbehind to exclude past-tense phrases.
  */
 const BLOCKED_INDICATORS: RegExp[] = [
-  // Stdin waiting patterns
-  /waiting for input/i,
-  /awaiting response/i,
-  /paused for confirmation/i,
+  // Stdin waiting patterns - exclude past tense "was waiting", "were waiting"
+  /(?<!was\s)(?<!were\s)(?<!been\s)\bwaiting for input\b/i,
+  /(?<!was\s)(?<!were\s)(?<!been\s)\bawaiting response\b/i,
+  /(?<!was\s)(?<!were\s)(?<!been\s)\bpaused for confirmation\b/i,
   // Common permission tool patterns in JSONL
   /"tool"\s*:\s*"(?:Bash|Write|Edit)"[\s\S]*?"blocked"\s*:\s*true/i,
 ];
@@ -133,8 +142,9 @@ export class PermissionDenialDetector {
   detect(input: PermissionDenialInput): PermissionDenialResult {
     const { stdout, stderr, agentId } = input;
 
-    // Only check Claude agent for now
-    if (agentId && agentId !== 'claude') {
+    // Only check Claude-based agents (case-insensitive match for agent IDs containing 'claude')
+    // Examples: 'claude', 'claude-code', 'Claude-3', 'CLAUDE_AGENT'
+    if (agentId && !this.isClaudeAgent(agentId)) {
       return { isBlocked: false };
     }
 
@@ -213,5 +223,16 @@ export class PermissionDenialDetector {
       return command;
     }
     return undefined;
+  }
+
+  /**
+   * Check if the agent ID indicates a Claude-based agent.
+   * Performs case-insensitive matching for agent IDs containing 'claude'.
+   *
+   * @param agentId - The agent identifier to check
+   * @returns true if the agent ID contains 'claude' (case-insensitive)
+   */
+  private isClaudeAgent(agentId: string): boolean {
+    return agentId.toLowerCase().includes('claude');
   }
 }
