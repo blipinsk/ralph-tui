@@ -521,7 +521,7 @@ describe('PermissionDenialDetector', () => {
         expect(result.blockedCommand).toBe('npm run test --coverage');
       });
 
-      test('truncates very long commands', () => {
+      test('truncates very long commands with ellipsis within 100-char limit', () => {
         // given
         const longCommand = 'a'.repeat(150);
 
@@ -531,7 +531,37 @@ describe('PermissionDenialDetector', () => {
         });
 
         // then
-        expect(result.blockedCommand!.length).toBeLessThanOrEqual(103); // 100 + "..."
+        // Ellipsis is part of the 100-char limit, not appended after
+        expect(result.blockedCommand!.length).toBe(100);
+        expect(result.blockedCommand!.endsWith('...')).toBe(true);
+      });
+
+      test('provides full command for accessibility when truncated', () => {
+        // given
+        const longCommand = 'a'.repeat(150);
+
+        // when
+        const result = detector.detect({
+          stdout: `Claude wants to run: ${longCommand}`,
+        });
+
+        // then
+        expect(result.fullBlockedCommand).toBe(longCommand);
+        expect(result.fullBlockedCommand!.length).toBe(150);
+      });
+
+      test('truncated and full commands match when under limit', () => {
+        // given
+        const shortCommand = 'npm run test';
+
+        // when
+        const result = detector.detect({
+          stdout: `Claude wants to run: ${shortCommand}`,
+        });
+
+        // then
+        expect(result.blockedCommand).toBe(shortCommand);
+        expect(result.fullBlockedCommand).toBe(shortCommand);
       });
     });
   });

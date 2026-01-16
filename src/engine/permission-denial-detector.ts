@@ -17,8 +17,11 @@ export interface PermissionDenialResult {
   /** Extracted message describing the permission request (if detected) */
   message?: string;
 
-  /** The command or action that was blocked */
+  /** The command or action that was blocked (truncated to 100 chars with ... if needed) */
   blockedCommand?: string;
+
+  /** The full untruncated command (for accessibility in detail views) */
+  fullBlockedCommand?: string;
 }
 
 /**
@@ -157,7 +160,7 @@ export class PermissionDenialDetector {
       if (match) {
         const message = this.extractMessage(combinedOutput, match);
         // If commandPattern is the same as pattern, reuse the match result
-        const blockedCommand = commandPattern
+        const commandResult = commandPattern
           ? commandPattern === pattern
             ? this.extractCommand(match)
             : this.extractCommand(combinedOutput.match(commandPattern))
@@ -167,7 +170,8 @@ export class PermissionDenialDetector {
           isBlocked: true,
           operation: operationName,
           message,
-          blockedCommand,
+          blockedCommand: commandResult?.truncated,
+          fullBlockedCommand: commandResult?.full,
         };
       }
     }
@@ -214,17 +218,26 @@ export class PermissionDenialDetector {
 
   /**
    * Extract the blocked command from the match result.
+   * Returns both truncated (for display) and full (for accessibility) versions.
    *
    * @param match - The regex match result (passed from detect() to avoid re-matching)
+   * @returns Object with truncated and full command, or undefined if no command found
    */
-  private extractCommand(match: RegExpMatchArray | null): string | undefined {
+  private extractCommand(
+    match: RegExpMatchArray | null
+  ): { truncated: string; full: string } | undefined {
     if (match && match[1]) {
-      let command = match[1].trim();
-      // Truncate long commands
-      if (command.length > 100) {
-        command = command.slice(0, 100) + '...';
+      const fullCommand = match[1].trim();
+      let truncatedCommand = fullCommand;
+
+      // Truncate long commands - ellipsis is part of the 100-char limit
+      const maxLength = 100;
+      const ellipsis = '...';
+      if (fullCommand.length > maxLength) {
+        truncatedCommand = fullCommand.slice(0, maxLength - ellipsis.length) + ellipsis;
       }
-      return command;
+
+      return { truncated: truncatedCommand, full: fullCommand };
     }
     return undefined;
   }

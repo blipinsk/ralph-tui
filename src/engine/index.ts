@@ -169,7 +169,10 @@ export class ExecutionEngine {
   /** Permission denial detector for detecting blocked operations */
   private permissionDenialDetector: PermissionDenialDetector;
   /** Track blocked tasks that require user intervention */
-  private blockedTasks: Map<string, { operation: string; message: string; blockedCommand?: string }> = new Map();
+  private blockedTasks: Map<
+    string,
+    { operation: string; message: string; blockedCommand?: string; fullBlockedCommand?: string }
+  > = new Map();
   /** Track alternative approaches provided by users for retry attempts */
   private alternativeApproaches: Map<string, AlternativeApproachContext> = new Map();
   /** Track rate limit retry attempts per task (separate from generic retries) */
@@ -816,7 +819,9 @@ export class ExecutionEngine {
   /**
    * Get blocked task info.
    */
-  getBlockedTaskInfo(taskId: string): { operation: string; message: string; blockedCommand?: string } | undefined {
+  getBlockedTaskInfo(
+    taskId: string
+  ): { operation: string; message: string; blockedCommand?: string; fullBlockedCommand?: string } | undefined {
     return this.blockedTasks.get(taskId);
   }
 
@@ -824,7 +829,13 @@ export class ExecutionEngine {
    * Get all currently blocked tasks.
    * Returns an array of blocked task info with their IDs.
    */
-  getAllBlockedTasks(): Array<{ taskId: string; operation: string; message: string; blockedCommand?: string }> {
+  getAllBlockedTasks(): Array<{
+    taskId: string;
+    operation: string;
+    message: string;
+    blockedCommand?: string;
+    fullBlockedCommand?: string;
+  }> {
     return Array.from(this.blockedTasks.entries()).map(([taskId, info]) => ({
       taskId,
       ...info,
@@ -1208,6 +1219,7 @@ export class ExecutionEngine {
           operation: permissionResult.operation ?? 'unknown operation',
           message: permissionResult.message ?? 'Permission required',
           blockedCommand: permissionResult.blockedCommand,
+          fullBlockedCommand: permissionResult.fullBlockedCommand,
         });
 
         // Update tracker to blocked status
@@ -1222,6 +1234,7 @@ export class ExecutionEngine {
           operation: permissionResult.operation ?? 'unknown operation',
           message: permissionResult.message ?? 'Permission required',
           blockedCommand: permissionResult.blockedCommand,
+          fullBlockedCommand: permissionResult.fullBlockedCommand,
         };
         this.emit(blockedEvent);
 
@@ -1234,6 +1247,7 @@ export class ExecutionEngine {
           operation: permissionResult.operation ?? 'unknown operation',
           message: permissionResult.message ?? 'Permission required',
           blockedCommand: permissionResult.blockedCommand,
+          fullBlockedCommand: permissionResult.fullBlockedCommand,
         };
         this.emit(taskBlockedEvent);
 

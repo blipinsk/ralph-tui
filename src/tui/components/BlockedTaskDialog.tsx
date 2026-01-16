@@ -17,8 +17,11 @@ export interface BlockedOperationInfo {
   /** Human-readable message explaining the permission request */
   message: string;
 
-  /** The exact command/path that was blocked (for copy-paste) */
+  /** The command/path that was blocked (truncated to 100 chars with ... if needed) */
   blockedCommand?: string;
+
+  /** The full untruncated command (for accessibility in detail views) */
+  fullBlockedCommand?: string;
 
   /** Task ID that is blocked */
   taskId: string;

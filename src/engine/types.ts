@@ -522,8 +522,10 @@ export interface IterationBlockedEvent extends EngineEventBase {
   operation: string;
   /** Human-readable message describing the blocked operation */
   message: string;
-  /** The specific command that was blocked (if available) */
+  /** The specific command that was blocked (truncated to 100 chars with ... if needed) */
   blockedCommand?: string;
+  /** The full untruncated command (for accessibility in detail views) */
+  fullBlockedCommand?: string;
 }
 
 /**
@@ -540,8 +542,10 @@ export interface TaskBlockedEvent extends EngineEventBase {
   operation: string;
   /** Human-readable message describing why the task is blocked */
   message: string;
-  /** The specific command that was blocked (if available) */
+  /** The specific command that was blocked (truncated to 100 chars with ... if needed) */
   blockedCommand?: string;
+  /** The full untruncated command (for accessibility in detail views) */
+  fullBlockedCommand?: string;
 }
 
 /**

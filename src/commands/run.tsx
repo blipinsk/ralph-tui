@@ -112,7 +112,15 @@ function printBlockedTasksSummary(
  * Get blocked tasks summary from engine with task titles resolved from tracker.
  */
 async function getBlockedTasksSummary(
-  engine: { getAllBlockedTasks: () => Array<{ taskId: string; operation: string; message: string; blockedCommand?: string }> },
+  engine: {
+    getAllBlockedTasks: () => Array<{
+      taskId: string;
+      operation: string;
+      message: string;
+      blockedCommand?: string;
+      fullBlockedCommand?: string;
+    }>;
+  },
   tracker?: TrackerPlugin
 ): Promise<BlockedTaskSummaryItem[]> {
   const blockedTasks = engine.getAllBlockedTasks();

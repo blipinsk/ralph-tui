@@ -616,6 +616,7 @@ export function RunApp({
                       blockedOperation: event.operation,
                       blockedMessage: event.message,
                       blockedCommand: event.blockedCommand,
+                      fullBlockedCommand: event.fullBlockedCommand,
                     },
                   }
                 : t
@@ -627,6 +628,7 @@ export function RunApp({
               operation: event.operation,
               message: event.message,
               blockedCommand: event.blockedCommand,
+              fullBlockedCommand: event.fullBlockedCommand,
               taskId: event.task.id,
               taskTitle: event.task.title,
             };
@@ -659,6 +661,7 @@ export function RunApp({
                       blockedOperation: undefined,
                       blockedMessage: undefined,
                       blockedCommand: undefined,
+                      fullBlockedCommand: undefined,
                     },
                   }
                 : t
@@ -684,6 +687,7 @@ export function RunApp({
               operation: b.operation,
               message: b.message,
               blockedCommand: b.blockedCommand,
+              fullBlockedCommand: b.fullBlockedCommand,
               taskId: b.taskId,
               taskTitle: titleMap.get(b.taskId) ?? b.taskId,
             }));
