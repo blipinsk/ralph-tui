@@ -186,6 +186,9 @@ export interface StoredConfig {
 
   /** Notifications configuration */
   notifications?: NotificationsConfig;
+
+  /** Whether to show permission notice banner at session start (default: true) */
+  showPermissionNotice?: boolean;
 }
 
 /**

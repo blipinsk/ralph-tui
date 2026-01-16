@@ -21,6 +21,7 @@ import { ConfirmationDialog } from './ConfirmationDialog.js';
 import { HelpOverlay } from './HelpOverlay.js';
 import { SettingsView } from './SettingsView.js';
 import { EpicLoaderOverlay } from './EpicLoaderOverlay.js';
+import { PermissionNotice } from './PermissionNotice.js';
 import type { EpicLoaderMode } from './EpicLoaderOverlay.js';
 import { SubagentTreePanel } from './SubagentTreePanel.js';
 import type {
@@ -397,6 +398,11 @@ export function RunApp({
   const [activeAgentState, setActiveAgentState] = useState<ActiveAgentState | null>(null);
   // Rate limit state from engine - tracks primary agent rate limiting
   const [rateLimitState, setRateLimitState] = useState<RateLimitState | null>(null);
+  // Permission notice visibility - shown once at session start, dismissed on any key press
+  // Defaults to true unless disabled in config
+  const [showPermissionNotice, setShowPermissionNotice] = useState(
+    () => storedConfig?.showPermissionNotice !== false
+  );
 
   // Compute display agent name - prefer active agent from engine state, fallback to config
   const displayAgentName = activeAgentState?.plugin ?? agentName;
@@ -700,6 +706,12 @@ export function RunApp({
   // Handle keyboard navigation
   const handleKeyboard = useCallback(
     (key: { name: string; sequence?: string }) => {
+      // When permission notice is showing, any key dismisses it
+      if (showPermissionNotice && status === 'ready') {
+        setShowPermissionNotice(false);
+        return; // Consume the key press
+      }
+
       // When interrupt dialog is showing, only handle y/n/Esc
       if (showInterruptDialog) {
         switch (key.name) {
@@ -953,7 +965,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange]
+    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange, showPermissionNotice]
   );
 
   useKeyboard(handleKeyboard);
@@ -1332,6 +1344,9 @@ export function RunApp({
           }
         }}
       />
+
+      {/* Permission Notice - shown at session start in ready state */}
+      <PermissionNotice visible={showPermissionNotice && status === 'ready'} />
     </box>
   );
 }
