@@ -266,6 +266,32 @@ describe('JsonTrackerPlugin', () => {
 
       expect(task).toBeUndefined();
     });
+
+    test('accepts blocked status without error', async () => {
+      // given
+      await plugin.initialize({ path: prdPath });
+
+      // when
+      const task = await plugin.updateTaskStatus('US-001', 'blocked');
+
+      // then
+      expect(task).toBeDefined();
+      // JSON tracker maps 'blocked' to passes=false, which maps back to 'open'
+      expect(task?.status).toBe('open');
+    });
+
+    test('blocked status keeps task as not passed in file', async () => {
+      // given
+      await plugin.initialize({ path: prdPath });
+
+      // when
+      await plugin.updateTaskStatus('US-001', 'blocked');
+
+      // then
+      const content = await readFile(prdPath, 'utf-8');
+      const data = JSON.parse(content);
+      expect(data.userStories[0].passes).toBe(false);
+    });
   });
 
   describe('isComplete', () => {

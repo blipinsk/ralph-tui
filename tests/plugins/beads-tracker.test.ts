@@ -134,6 +134,20 @@ describe('BeadsTrackerPlugin status mapping', () => {
     // This tests the ID parsing logic in beadToTask/getTasks
     // Implementation would require mocking the bd CLI to return beads with dotted IDs
   });
+
+  describe('blocked status support', () => {
+    test('TrackerTaskStatus type includes blocked', () => {
+      // given -> no additional preconditions
+      // This test verifies that 'blocked' is a valid TrackerTaskStatus value
+      // by importing the type and checking compile-time type safety
+
+      // when
+      const blockedStatus: import('../../src/plugins/trackers/types.js').TrackerTaskStatus = 'blocked';
+
+      // then
+      expect(blockedStatus).toBe('blocked');
+    });
+  });
 });
 
 describe('BeadsTrackerPlugin detection', () => {
