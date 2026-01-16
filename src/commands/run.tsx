@@ -56,6 +56,90 @@ import { sendCompletionNotification, sendMaxIterationsNotification, sendErrorNot
 import type { NotificationSoundMode } from '../config/types.js';
 
 /**
+ * Blocked task information for session summary
+ */
+interface BlockedTaskSummaryItem {
+  taskId: string;
+  taskTitle?: string;
+  operation: string;
+  blockedCommand?: string;
+}
+
+/**
+ * Print a summary of remaining blocked tasks at session end.
+ * Only prints if there are blocked tasks remaining.
+ */
+function printBlockedTasksSummary(
+  blockedTasks: BlockedTaskSummaryItem[],
+  useLogger?: { info: (component: 'system', message: string) => void }
+): void {
+  if (blockedTasks.length === 0) {
+    return;
+  }
+
+  const log = (message: string): void => {
+    if (useLogger) {
+      useLogger.info('system', message);
+    } else {
+      console.log(message);
+    }
+  };
+
+  log('');
+  log('═══════════════════════════════════════════════════════════════════════');
+  log('                    BLOCKED TASKS REQUIRING ACTION                      ');
+  log('═══════════════════════════════════════════════════════════════════════');
+  log('');
+
+  for (const task of blockedTasks) {
+    const taskDisplay = task.taskTitle
+      ? `${task.taskId}: ${task.taskTitle}`
+      : task.taskId;
+    log(`  Task: ${taskDisplay}`);
+    log(`  Operation: ${task.operation}`);
+    if (task.blockedCommand) {
+      log(`  Command: ${task.blockedCommand}`);
+    }
+    log('');
+  }
+
+  log(`Total: ${blockedTasks.length} blocked task(s) need manual intervention`);
+  log('═══════════════════════════════════════════════════════════════════════');
+  log('');
+}
+
+/**
+ * Get blocked tasks summary from engine with task titles resolved from tracker.
+ */
+async function getBlockedTasksSummary(
+  engine: { getAllBlockedTasks: () => Array<{ taskId: string; operation: string; message: string; blockedCommand?: string }> },
+  tracker?: TrackerPlugin
+): Promise<BlockedTaskSummaryItem[]> {
+  const blockedTasks = engine.getAllBlockedTasks();
+  if (blockedTasks.length === 0) {
+    return [];
+  }
+
+  // Try to resolve task titles from tracker
+  let taskMap = new Map<string, string>();
+  if (tracker) {
+    try {
+      const tasks = await tracker.getTasks({ status: ['open', 'in_progress', 'completed'] });
+      taskMap = new Map(tasks.map(t => [t.id, t.title]));
+    } catch {
+      // Silently continue without titles if tracker fails
+    }
+  }
+
+  return blockedTasks.map(bt => ({
+    taskId: bt.taskId,
+    taskTitle: taskMap.get(bt.taskId),
+    operation: bt.operation,
+    blockedCommand: bt.blockedCommand,
+  }));
+}
+
+/**
  * Extended runtime options with noSetup flag
  */
 interface ExtendedRuntimeOptions extends RuntimeOptions {
@@ -1147,6 +1231,10 @@ async function runHeadless(
       }
     }
 
+    // Display summary of remaining blocked tasks (if any)
+    const blockedTasksSummary = await getBlockedTasksSummary(engine, engine.getTracker() ?? undefined);
+    printBlockedTasksSummary(blockedTasksSummary, logger);
+
     // Save interrupted state
     currentState = { ...currentState, status: 'interrupted' };
     await savePersistedSession(currentState);
@@ -1183,6 +1271,10 @@ async function runHeadless(
         currentState = clearActiveTasks(currentState);
       }
     }
+
+    // Display summary of remaining blocked tasks (if any)
+    const blockedTasksSummary = await getBlockedTasksSummary(engine, engine.getTracker() ?? undefined);
+    printBlockedTasksSummary(blockedTasksSummary, logger);
 
     currentState = { ...currentState, status: 'interrupted' };
     await savePersistedSession(currentState);
@@ -1483,6 +1575,10 @@ export async function executeRunCommand(args: string[]): Promise<void> {
   const finalState = engine.getState();
   const allComplete = finalState.tasksCompleted >= finalState.totalTasks ||
     finalState.status === 'idle';
+
+  // Display summary of remaining blocked tasks (if any) before session end messages
+  const blockedTasksSummary = await getBlockedTasksSummary(engine, tracker);
+  printBlockedTasksSummary(blockedTasksSummary);
 
   if (allComplete) {
     // Mark as completed and clean up session file
