@@ -543,6 +543,27 @@ export interface TaskBlockedEvent extends EngineEventBase {
 }
 
 /**
+ * Context for an alternative approach provided by the user.
+ * Used when the user wants Claude to try a different method for a blocked task.
+ */
+export interface AlternativeApproachContext {
+  /** The original task ID this alternative is for */
+  taskId: string;
+
+  /** User-provided description of the alternative approach */
+  userSuggestion: string;
+
+  /** The original operation that was blocked */
+  originalOperation: string;
+
+  /** The original command that was blocked (if available) */
+  originalBlockedCommand?: string;
+
+  /** Timestamp when the alternative was suggested */
+  suggestedAt: Date;
+}
+
+/**
  * Union of all engine events
  */
 export type EngineEvent =

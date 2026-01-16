@@ -10,6 +10,7 @@ import type {
   AgentRecoveryAttemptedEvent,
   AgentSwitchedEvent,
   AllAgentsLimitedEvent,
+  AlternativeApproachContext,
   EngineEvent,
   EngineEventListener,
   EngineState,
@@ -61,42 +62,89 @@ const PRIMARY_RECOVERY_TEST_TIMEOUT_MS = 5000;
 const PRIMARY_RECOVERY_TEST_PROMPT = 'Reply with just the word "ok".';
 
 /**
+ * Build the alternative approach evaluation section for the prompt.
+ * This section instructs Claude to analyze and evaluate the user's suggested alternative.
+ */
+function buildAlternativeApproachSection(alternative: AlternativeApproachContext): string {
+  const lines: string[] = [];
+  lines.push('');
+  lines.push('## Alternative Approach Evaluation Required');
+  lines.push('');
+  lines.push('**IMPORTANT**: The user has suggested an alternative approach after your previous attempt was blocked.');
+  lines.push('Before attempting this alternative, you MUST:');
+  lines.push('');
+  lines.push('1. **Analyze the alternative**: Explain what the suggested approach would do');
+  lines.push('2. **Evaluate feasibility**: Confirm whether this alternative achieves the original goal');
+  lines.push('3. **Identify concerns**: Note any potential issues or limitations');
+  lines.push('4. **Proceed or ask**: If the alternative is valid, attempt it. If not, explain why and ask for clarification.');
+  lines.push('');
+  lines.push('### Previous Blocked Operation');
+  lines.push(`- **Operation type**: ${alternative.originalOperation}`);
+  if (alternative.originalBlockedCommand) {
+    lines.push(`- **Blocked command**: \`${alternative.originalBlockedCommand}\``);
+  }
+  lines.push('');
+  lines.push('### User-Suggested Alternative');
+  lines.push('```');
+  lines.push(alternative.userSuggestion);
+  lines.push('```');
+  lines.push('');
+  lines.push('Please evaluate this alternative approach before attempting it. If the alternative is also blocked, the user will have the opportunity to suggest another approach.');
+  lines.push('');
+  return lines.join('\n');
+}
+
+/**
  * Build prompt for the agent based on task using the template system.
  * Falls back to a hardcoded default if template rendering fails.
  * Includes recent progress from previous iterations for context.
+ * Optionally includes alternative approach context when provided by the user.
  */
-async function buildPrompt(task: TrackerTask, config: RalphConfig): Promise<string> {
+async function buildPrompt(
+  task: TrackerTask,
+  config: RalphConfig,
+  alternativeContext?: AlternativeApproachContext
+): Promise<string> {
   // Load recent progress for context (last 5 iterations)
   const recentProgress = await getRecentProgressSummary(config.cwd, 5);
 
   // Use the template system
   const result = renderPrompt(task, config, undefined, recentProgress);
 
+  let basePrompt: string;
+
   if (result.success && result.prompt) {
-    return result.prompt;
-  }
+    basePrompt = result.prompt;
+  } else {
+    // Log template error and fall back to simple format
+    console.error(`Template rendering failed: ${result.error}`);
 
-  // Log template error and fall back to simple format
-  console.error(`Template rendering failed: ${result.error}`);
+    // Fallback prompt
+    const lines: string[] = [];
+    lines.push('## Task');
+    lines.push(`**ID**: ${task.id}`);
+    lines.push(`**Title**: ${task.title}`);
 
-  // Fallback prompt
-  const lines: string[] = [];
-  lines.push('## Task');
-  lines.push(`**ID**: ${task.id}`);
-  lines.push(`**Title**: ${task.title}`);
+    if (task.description) {
+      lines.push('');
+      lines.push('## Description');
+      lines.push(task.description);
+    }
 
-  if (task.description) {
     lines.push('');
-    lines.push('## Description');
-    lines.push(task.description);
+    lines.push('## Instructions');
+    lines.push('Complete the task described above. When finished, signal completion with:');
+    lines.push('<promise>COMPLETE</promise>');
+
+    basePrompt = lines.join('\n');
   }
 
-  lines.push('');
-  lines.push('## Instructions');
-  lines.push('Complete the task described above. When finished, signal completion with:');
-  lines.push('<promise>COMPLETE</promise>');
+  // Append alternative approach section if provided
+  if (alternativeContext) {
+    basePrompt += buildAlternativeApproachSection(alternativeContext);
+  }
 
-  return lines.join('\n');
+  return basePrompt;
 }
 
 /**
@@ -122,6 +170,8 @@ export class ExecutionEngine {
   private permissionDenialDetector: PermissionDenialDetector;
   /** Track blocked tasks that require user intervention */
   private blockedTasks: Map<string, { operation: string; message: string; blockedCommand?: string }> = new Map();
+  /** Track alternative approaches provided by users for retry attempts */
+  private alternativeApproaches: Map<string, AlternativeApproachContext> = new Map();
   /** Track rate limit retry attempts per task (separate from generic retries) */
   private rateLimitRetryMap: Map<string, number> = new Map();
   /** Rate limit handling configuration */
@@ -744,6 +794,59 @@ export class ExecutionEngine {
   }
 
   /**
+   * Resolve a blocked task with a user-provided alternative approach.
+   * The alternative will be included in the prompt for Claude to evaluate.
+   *
+   * @param taskId - The blocked task ID
+   * @param alternativeSuggestion - User's description of the alternative approach
+   * @returns true if the alternative was successfully queued
+   */
+  async resolveBlockedTaskWithAlternative(taskId: string, alternativeSuggestion: string): Promise<boolean> {
+    const blockedInfo = this.blockedTasks.get(taskId);
+    if (!blockedInfo) {
+      return false;
+    }
+
+    // Store the alternative approach context
+    const alternativeContext: AlternativeApproachContext = {
+      taskId,
+      userSuggestion: alternativeSuggestion,
+      originalOperation: blockedInfo.operation,
+      originalBlockedCommand: blockedInfo.blockedCommand,
+      suggestedAt: new Date(),
+    };
+    this.alternativeApproaches.set(taskId, alternativeContext);
+
+    // Remove from blocked tracking
+    this.blockedTasks.delete(taskId);
+
+    // Reset to open status for retry with the alternative
+    await this.tracker?.updateTaskStatus(taskId, 'open');
+
+    // If engine is paused (all tasks were blocked), resume it now that a task is available
+    if (this.state.status === 'paused') {
+      this.resume();
+    }
+
+    return true;
+  }
+
+  /**
+   * Get the alternative approach context for a task (if any).
+   */
+  getAlternativeApproachContext(taskId: string): AlternativeApproachContext | undefined {
+    return this.alternativeApproaches.get(taskId);
+  }
+
+  /**
+   * Clear the alternative approach context for a task.
+   * Called after the task completes (successfully or blocked again).
+   */
+  clearAlternativeApproachContext(taskId: string): void {
+    this.alternativeApproaches.delete(taskId);
+  }
+
+  /**
    * Handle rate limit with exponential backoff retry.
    * Returns true if retry should be attempted, false if max retries exceeded.
    *
@@ -857,8 +960,17 @@ export class ExecutionEngine {
       iteration,
     });
 
-    // Build prompt (includes recent progress context)
-    const prompt = await buildPrompt(task, this.config);
+    // Check for alternative approach context (user may have suggested a different approach)
+    const alternativeContext = this.getAlternativeApproachContext(task.id);
+
+    // Build prompt (includes recent progress context and alternative approach if provided)
+    const prompt = await buildPrompt(task, this.config, alternativeContext);
+
+    // Clear the alternative context after including it in the prompt
+    // (It will be regenerated if the alternative is also blocked)
+    if (alternativeContext) {
+      this.clearAlternativeApproachContext(task.id);
+    }
 
     // Build agent flags
     const flags: string[] = [];

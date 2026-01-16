@@ -24,6 +24,7 @@ import { EpicLoaderOverlay } from './EpicLoaderOverlay.js';
 import { PermissionNotice } from './PermissionNotice.js';
 import { BlockedTaskDialog } from './BlockedTaskDialog.js';
 import type { BlockedOperationInfo } from './BlockedTaskDialog.js';
+import { AlternativeApproachInput } from './AlternativeApproachInput.js';
 import type { EpicLoaderMode } from './EpicLoaderOverlay.js';
 import { SubagentTreePanel } from './SubagentTreePanel.js';
 import type {
@@ -411,6 +412,9 @@ export function RunApp({
   const [blockedTaskQueue, setBlockedTaskQueue] = useState<BlockedOperationInfo[]>([]);
   const [blockedQueueIndex, setBlockedQueueIndex] = useState(0);
 
+  // Alternative approach input state - shown when user presses 'a' on blocked dialog
+  const [showAlternativeInput, setShowAlternativeInput] = useState(false);
+
   // Get current blocked info from queue
   const blockedInfo = blockedTaskQueue.length > 0 ? blockedTaskQueue[blockedQueueIndex] : null;
 
@@ -757,6 +761,44 @@ export function RunApp({
     setFocusedSubagentId(id);
   }, []);
 
+  // Handler for removing a blocked task from the queue and advancing to next
+  const removeFromQueueAndAdvanceCallback = useCallback(() => {
+    if (!blockedInfo) return;
+    setBlockedTaskQueue((prev) => {
+      const newQueue = prev.filter((b) => b.taskId !== blockedInfo.taskId);
+      // If queue is empty after removal, close dialog
+      if (newQueue.length === 0) {
+        setShowBlockedDialog(false);
+        setBlockedQueueIndex(0);
+      } else {
+        // Adjust index if we're past the end
+        setBlockedQueueIndex((idx) => Math.min(idx, newQueue.length - 1));
+      }
+      return newQueue;
+    });
+  }, [blockedInfo]);
+
+  // Handler for alternative approach input submission
+  const handleAlternativeSubmit = useCallback(
+    (alternative: string) => {
+      if (!blockedInfo) return;
+      // Submit the alternative approach to the engine
+      engine.resolveBlockedTaskWithAlternative(blockedInfo.taskId, alternative).then((success) => {
+        if (success) {
+          setShowAlternativeInput(false);
+          removeFromQueueAndAdvanceCallback();
+        }
+      });
+    },
+    [engine, blockedInfo, removeFromQueueAndAdvanceCallback]
+  );
+
+  // Handler for alternative approach input cancellation
+  const handleAlternativeCancel = useCallback(() => {
+    setShowAlternativeInput(false);
+    // Return to blocked dialog (don't remove from queue)
+  }, []);
+
   // Handle keyboard navigation
   const handleKeyboard = useCallback(
     (key: { name: string; sequence?: string }) => {
@@ -815,6 +857,11 @@ export function RunApp({
         return;
       }
 
+      // When alternative input is showing, let it handle its own keyboard events
+      if (showAlternativeInput) {
+        return;
+      }
+
       // When blocked task dialog is showing, handle d/x/a keys and navigation
       if (showBlockedDialog && blockedInfo) {
         // Helper to remove current task from queue and adjust index
@@ -851,12 +898,8 @@ export function RunApp({
             });
             break;
           case 'a':
-            // User wants to provide an alternative approach (retry the task)
-            engine.resolveBlockedTask(blockedInfo.taskId, 'retry').then((success) => {
-              if (success) {
-                removeFromQueueAndAdvance();
-              }
-            });
+            // User wants to provide an alternative approach - show input dialog
+            setShowAlternativeInput(true);
             break;
           case 'left':
           case 'h':
@@ -1095,7 +1138,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange, showPermissionNotice, showBlockedDialog, blockedInfo]
+    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange, showPermissionNotice, showBlockedDialog, blockedInfo, showAlternativeInput]
   );
 
   useKeyboard(handleKeyboard);
@@ -1480,10 +1523,20 @@ export function RunApp({
 
       {/* Blocked Task Dialog - shown when a task is blocked and requires user action */}
       <BlockedTaskDialog
-        visible={showBlockedDialog}
+        visible={showBlockedDialog && !showAlternativeInput}
         blockedInfo={blockedInfo}
         queueIndex={blockedQueueIndex}
         queueTotal={blockedTaskQueue.length}
+      />
+
+      {/* Alternative Approach Input - shown when user presses 'a' on blocked dialog */}
+      <AlternativeApproachInput
+        visible={showAlternativeInput}
+        taskTitle={blockedInfo?.taskTitle ?? ''}
+        blockedOperation={blockedInfo?.operation ?? ''}
+        blockedCommand={blockedInfo?.blockedCommand}
+        onSubmit={handleAlternativeSubmit}
+        onCancel={handleAlternativeCancel}
       />
     </box>
   );
