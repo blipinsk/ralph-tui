@@ -259,6 +259,8 @@ export interface EnginePausedEvent extends EngineEventBase {
   type: 'engine:paused';
   /** Current iteration when paused */
   currentIteration: number;
+  /** Reason for pausing (if automatic) */
+  reason?: 'user' | 'all_tasks_blocked';
 }
 
 /**

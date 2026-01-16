@@ -398,9 +398,41 @@ export class ExecutionEngine {
         break;
       }
 
-      // Get next task (excluding skipped tasks)
+      // Get next task (excluding skipped and blocked tasks)
       const task = await this.getNextAvailableTask();
       if (!task) {
+        // Check if there are blocked tasks - if so, pause instead of stopping
+        if (this.hasBlockedTasks()) {
+          // All remaining tasks are blocked - pause and wait for user to resolve blocked tasks
+          this.state.status = 'pausing';
+          this.emit({
+            type: 'engine:paused',
+            timestamp: new Date().toISOString(),
+            currentIteration: this.state.currentIteration,
+            reason: 'all_tasks_blocked',
+          });
+          this.state.status = 'paused';
+
+          // Wait until resumed (user resolved at least one blocked task)
+          while (this.state.status === 'paused' && !this.shouldStop) {
+            await this.delay(100);
+          }
+
+          // If stopped while paused, exit
+          if (this.shouldStop) {
+            break;
+          }
+
+          // Resumed - continue the loop to find the next task
+          this.emit({
+            type: 'engine:resumed',
+            timestamp: new Date().toISOString(),
+            fromIteration: this.state.currentIteration,
+          });
+          continue;
+        }
+
+        // No tasks at all - stop the engine
         this.emit({
           type: 'engine:stopped',
           timestamp: new Date().toISOString(),
@@ -441,7 +473,7 @@ export class ExecutionEngine {
   }
 
   /**
-   * Get the next available task, excluding skipped ones
+   * Get the next available task, excluding skipped and blocked ones
    */
   private async getNextAvailableTask(): Promise<TrackerTask | null> {
     const tasks = await this.tracker!.getTasks({ status: ['open', 'in_progress'] });
@@ -449,6 +481,11 @@ export class ExecutionEngine {
     for (const task of tasks) {
       // Skip tasks that have been marked as skipped
       if (this.skippedTasks.has(task.id)) {
+        continue;
+      }
+
+      // Skip tasks that are currently blocked (waiting for user intervention)
+      if (this.blockedTasks.has(task.id)) {
         continue;
       }
 
@@ -659,6 +696,11 @@ export class ExecutionEngine {
         break;
     }
 
+    // If engine is paused (all tasks were blocked), resume it now that a task is available
+    if (this.state.status === 'paused') {
+      this.resume();
+    }
+
     return true;
   }
 
@@ -674,6 +716,31 @@ export class ExecutionEngine {
    */
   getBlockedTaskInfo(taskId: string): { operation: string; message: string; blockedCommand?: string } | undefined {
     return this.blockedTasks.get(taskId);
+  }
+
+  /**
+   * Get all currently blocked tasks.
+   * Returns an array of blocked task info with their IDs.
+   */
+  getAllBlockedTasks(): Array<{ taskId: string; operation: string; message: string; blockedCommand?: string }> {
+    return Array.from(this.blockedTasks.entries()).map(([taskId, info]) => ({
+      taskId,
+      ...info,
+    }));
+  }
+
+  /**
+   * Check if there are any blocked tasks.
+   */
+  hasBlockedTasks(): boolean {
+    return this.blockedTasks.size > 0;
+  }
+
+  /**
+   * Get the count of blocked tasks.
+   */
+  getBlockedTaskCount(): number {
+    return this.blockedTasks.size;
   }
 
   /**
@@ -988,8 +1055,8 @@ export class ExecutionEngine {
         };
         this.emit(taskBlockedEvent);
 
-        // Pause the engine - user intervention required
-        this.pause();
+        // Don't pause - continue working on other tasks
+        // The TUI will track blocked tasks and allow user to resolve them anytime
 
         // Return as failed with blocked status
         return {

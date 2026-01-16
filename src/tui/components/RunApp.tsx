@@ -406,9 +406,13 @@ export function RunApp({
     () => storedConfig?.showPermissionNotice !== false
   );
 
-  // Blocked task dialog state - shows when a task is blocked and requires user action
+  // Blocked task dialog state - supports multiple blocked tasks with queue navigation
   const [showBlockedDialog, setShowBlockedDialog] = useState(false);
-  const [blockedInfo, setBlockedInfo] = useState<BlockedOperationInfo | null>(null);
+  const [blockedTaskQueue, setBlockedTaskQueue] = useState<BlockedOperationInfo[]>([]);
+  const [blockedQueueIndex, setBlockedQueueIndex] = useState(0);
+
+  // Get current blocked info from queue
+  const blockedInfo = blockedTaskQueue.length > 0 ? blockedTaskQueue[blockedQueueIndex] : null;
 
   // Compute display agent name - prefer active agent from engine state, fallback to config
   const displayAgentName = activeAgentState?.plugin ?? agentName;
@@ -610,14 +614,22 @@ export function RunApp({
                 : t
             )
           );
-          // Show the blocked task dialog with all context
-          setBlockedInfo({
-            operation: event.operation,
-            message: event.message,
-            blockedCommand: event.blockedCommand,
-            taskId: event.task.id,
-            taskTitle: event.task.title,
+          // Add to blocked task queue (if not already present)
+          setBlockedTaskQueue((prev) => {
+            const newInfo: BlockedOperationInfo = {
+              operation: event.operation,
+              message: event.message,
+              blockedCommand: event.blockedCommand,
+              taskId: event.task.id,
+              taskTitle: event.task.title,
+            };
+            // Avoid duplicates (task may already be in queue if re-blocked)
+            if (prev.some((b) => b.taskId === event.task.id)) {
+              return prev;
+            }
+            return [...prev, newInfo];
           });
+          // Show the blocked task dialog
           setShowBlockedDialog(true);
           break;
 
@@ -803,15 +815,30 @@ export function RunApp({
         return;
       }
 
-      // When blocked task dialog is showing, handle d/x/a keys
+      // When blocked task dialog is showing, handle d/x/a keys and navigation
       if (showBlockedDialog && blockedInfo) {
+        // Helper to remove current task from queue and adjust index
+        const removeFromQueueAndAdvance = () => {
+          setBlockedTaskQueue((prev) => {
+            const newQueue = prev.filter((b) => b.taskId !== blockedInfo.taskId);
+            // If queue is empty after removal, close dialog
+            if (newQueue.length === 0) {
+              setShowBlockedDialog(false);
+              setBlockedQueueIndex(0);
+            } else {
+              // Adjust index if we're past the end
+              setBlockedQueueIndex((idx) => Math.min(idx, newQueue.length - 1));
+            }
+            return newQueue;
+          });
+        };
+
         switch (key.name) {
           case 'd':
             // User manually completed the blocked operation
             engine.resolveBlockedTask(blockedInfo.taskId, 'done').then((success) => {
               if (success) {
-                setShowBlockedDialog(false);
-                setBlockedInfo(null);
+                removeFromQueueAndAdvance();
               }
             });
             break;
@@ -819,8 +846,7 @@ export function RunApp({
             // User wants to skip this task
             engine.resolveBlockedTask(blockedInfo.taskId, 'skip').then((success) => {
               if (success) {
-                setShowBlockedDialog(false);
-                setBlockedInfo(null);
+                removeFromQueueAndAdvance();
               }
             });
             break;
@@ -828,13 +854,30 @@ export function RunApp({
             // User wants to provide an alternative approach (retry the task)
             engine.resolveBlockedTask(blockedInfo.taskId, 'retry').then((success) => {
               if (success) {
-                setShowBlockedDialog(false);
-                setBlockedInfo(null);
+                removeFromQueueAndAdvance();
               }
             });
             break;
+          case 'left':
+          case 'h':
+            // Navigate to previous blocked task in queue
+            if (blockedTaskQueue.length > 1) {
+              setBlockedQueueIndex((idx) =>
+                idx > 0 ? idx - 1 : blockedTaskQueue.length - 1
+              );
+            }
+            break;
+          case 'right':
+          case 'l':
+            // Navigate to next blocked task in queue
+            if (blockedTaskQueue.length > 1) {
+              setBlockedQueueIndex((idx) =>
+                idx < blockedTaskQueue.length - 1 ? idx + 1 : 0
+              );
+            }
+            break;
           case 'escape':
-            // Allow closing the dialog with Escape (keeps task blocked)
+            // Allow closing the dialog with Escape (keeps tasks blocked, can continue working)
             setShowBlockedDialog(false);
             break;
         }
@@ -934,6 +977,13 @@ export function RunApp({
         case 'r':
           // Refresh task list from tracker
           engine.refreshTasks();
+          break;
+
+        case 'b':
+          // Show blocked tasks dialog (if there are any blocked tasks)
+          if (blockedTaskQueue.length > 0) {
+            setShowBlockedDialog(true);
+          }
           break;
 
         case '+':
@@ -1432,6 +1482,8 @@ export function RunApp({
       <BlockedTaskDialog
         visible={showBlockedDialog}
         blockedInfo={blockedInfo}
+        queueIndex={blockedQueueIndex}
+        queueTotal={blockedTaskQueue.length}
       />
     </box>
   );

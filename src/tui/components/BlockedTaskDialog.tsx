@@ -36,6 +36,12 @@ export interface BlockedTaskDialogProps {
 
   /** Information about the blocked operation */
   blockedInfo: BlockedOperationInfo | null;
+
+  /** Current position in the blocked task queue (0-indexed) */
+  queueIndex?: number;
+
+  /** Total number of blocked tasks in queue */
+  queueTotal?: number;
 }
 
 /**
@@ -95,6 +101,8 @@ function getOperationContext(operation: string): { why: string; affects: string 
 export function BlockedTaskDialog({
   visible,
   blockedInfo,
+  queueIndex = 0,
+  queueTotal = 1,
 }: BlockedTaskDialogProps): ReactNode {
   if (!visible || !blockedInfo) {
     return null;
@@ -102,6 +110,7 @@ export function BlockedTaskDialog({
 
   const { operation, message, blockedCommand, taskTitle } = blockedInfo;
   const context = getOperationContext(operation);
+  const showQueueNav = queueTotal > 1;
 
   // Calculate dialog dimensions
   // Command display needs enough width for reasonable commands
@@ -132,11 +141,16 @@ export function BlockedTaskDialog({
           padding: 1,
         }}
       >
-        {/* Title bar */}
-        <box style={{ marginBottom: 1 }}>
+        {/* Title bar with queue position */}
+        <box style={{ marginBottom: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
           <text fg={colors.status.warning}>
             {'⊘ Blocked Operation'}
           </text>
+          {showQueueNav && (
+            <text fg={colors.fg.muted}>
+              {`${queueIndex + 1} of ${queueTotal} blocked`}
+            </text>
+          )}
         </box>
 
         {/* Task context */}
@@ -209,9 +223,24 @@ export function BlockedTaskDialog({
             <span fg={colors.status.warning}>[x]</span>
             {' Skip  '}
             <span fg={colors.accent.primary}>[a]</span>
-            {' Alternative'}
+            {' Alternative  '}
+            <span fg={colors.fg.dim}>[Esc]</span>
+            {' Close'}
           </text>
         </box>
+
+        {/* Navigation hint for multiple blocked tasks */}
+        {showQueueNav && (
+          <box style={{ marginTop: 1 }}>
+            <text fg={colors.fg.muted}>
+              {'Navigate: '}
+              <span fg={colors.accent.secondary}>[←/h]</span>
+              {' Previous  '}
+              <span fg={colors.accent.secondary}>[→/l]</span>
+              {' Next'}
+            </text>
+          </box>
+        )}
 
         {/* Action descriptions */}
         <box style={{ marginTop: 1 }}>
