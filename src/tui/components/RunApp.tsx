@@ -22,6 +22,8 @@ import { HelpOverlay } from './HelpOverlay.js';
 import { SettingsView } from './SettingsView.js';
 import { EpicLoaderOverlay } from './EpicLoaderOverlay.js';
 import { PermissionNotice } from './PermissionNotice.js';
+import { BlockedTaskDialog } from './BlockedTaskDialog.js';
+import type { BlockedOperationInfo } from './BlockedTaskDialog.js';
 import type { EpicLoaderMode } from './EpicLoaderOverlay.js';
 import { SubagentTreePanel } from './SubagentTreePanel.js';
 import type {
@@ -404,6 +406,10 @@ export function RunApp({
     () => storedConfig?.showPermissionNotice !== false
   );
 
+  // Blocked task dialog state - shows when a task is blocked and requires user action
+  const [showBlockedDialog, setShowBlockedDialog] = useState(false);
+  const [blockedInfo, setBlockedInfo] = useState<BlockedOperationInfo | null>(null);
+
   // Compute display agent name - prefer active agent from engine state, fallback to config
   const displayAgentName = activeAgentState?.plugin ?? agentName;
 
@@ -604,6 +610,15 @@ export function RunApp({
                 : t
             )
           );
+          // Show the blocked task dialog with all context
+          setBlockedInfo({
+            operation: event.operation,
+            message: event.message,
+            blockedCommand: event.blockedCommand,
+            taskId: event.task.id,
+            taskTitle: event.task.title,
+          });
+          setShowBlockedDialog(true);
           break;
 
         case 'iteration:blocked':
@@ -786,6 +801,44 @@ export function RunApp({
       // Epic loader handles its own keyboard events via useKeyboard
       if (showEpicLoader) {
         return;
+      }
+
+      // When blocked task dialog is showing, handle d/x/a keys
+      if (showBlockedDialog && blockedInfo) {
+        switch (key.name) {
+          case 'd':
+            // User manually completed the blocked operation
+            engine.resolveBlockedTask(blockedInfo.taskId, 'done').then((success) => {
+              if (success) {
+                setShowBlockedDialog(false);
+                setBlockedInfo(null);
+              }
+            });
+            break;
+          case 'x':
+            // User wants to skip this task
+            engine.resolveBlockedTask(blockedInfo.taskId, 'skip').then((success) => {
+              if (success) {
+                setShowBlockedDialog(false);
+                setBlockedInfo(null);
+              }
+            });
+            break;
+          case 'a':
+            // User wants to provide an alternative approach (retry the task)
+            engine.resolveBlockedTask(blockedInfo.taskId, 'retry').then((success) => {
+              if (success) {
+                setShowBlockedDialog(false);
+                setBlockedInfo(null);
+              }
+            });
+            break;
+          case 'escape':
+            // Allow closing the dialog with Escape (keeps task blocked)
+            setShowBlockedDialog(false);
+            break;
+        }
+        return; // Don't process other keys when dialog is showing
       }
 
       switch (key.name) {
@@ -992,7 +1045,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange, showPermissionNotice]
+    [displayedTasks, selectedIndex, status, engine, onQuit, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showQuitDialog, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange, showPermissionNotice, showBlockedDialog, blockedInfo]
   );
 
   useKeyboard(handleKeyboard);
@@ -1374,6 +1427,12 @@ export function RunApp({
 
       {/* Permission Notice - shown at session start in ready state */}
       <PermissionNotice visible={showPermissionNotice && status === 'ready'} />
+
+      {/* Blocked Task Dialog - shown when a task is blocked and requires user action */}
+      <BlockedTaskDialog
+        visible={showBlockedDialog}
+        blockedInfo={blockedInfo}
+      />
     </box>
   );
 }
