@@ -746,6 +746,19 @@ export class ExecutionEngine {
     // Remove from blocked tracking
     this.blockedTasks.delete(taskId);
 
+    // Map 'retry' to how we report resolution (treat as 'skip' for event purposes since it's re-queuing)
+    const resolution = action === 'retry' ? 'skip' : action;
+
+    // Emit task:unblocked event so UI knows this task is no longer blocked
+    this.emit({
+      type: 'task:unblocked',
+      timestamp: new Date().toISOString(),
+      taskId,
+      resolution,
+      operation: blockedInfo.operation,
+      message: blockedInfo.message,
+    });
+
     switch (action) {
       case 'done':
         // Mark task as completed
@@ -776,6 +789,14 @@ export class ExecutionEngine {
         await this.tracker?.updateTaskStatus(taskId, 'open');
         break;
     }
+
+    // Emit task:resolved event so UI can sync its blocked task queue with engine state
+    this.emit({
+      type: 'task:resolved',
+      timestamp: new Date().toISOString(),
+      taskId,
+      resolution,
+    });
 
     // If engine is paused (all tasks were blocked), resume it now that a task is available
     if (this.state.status === 'paused') {
@@ -851,8 +872,26 @@ export class ExecutionEngine {
     // Remove from blocked tracking
     this.blockedTasks.delete(taskId);
 
+    // Emit task:unblocked event so UI knows this task is no longer blocked
+    this.emit({
+      type: 'task:unblocked',
+      timestamp: new Date().toISOString(),
+      taskId,
+      resolution: 'alternative',
+      operation: blockedInfo.operation,
+      message: blockedInfo.message,
+    });
+
     // Reset to open status for retry with the alternative
     await this.tracker?.updateTaskStatus(taskId, 'open');
+
+    // Emit task:resolved event so UI can sync its blocked task queue with engine state
+    this.emit({
+      type: 'task:resolved',
+      timestamp: new Date().toISOString(),
+      taskId,
+      resolution: 'alternative',
+    });
 
     // If engine is paused (all tasks were blocked), resume it now that a task is available
     if (this.state.status === 'paused') {

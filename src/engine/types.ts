@@ -208,6 +208,8 @@ export type EngineEventType =
   | 'task:activated'
   | 'task:completed'
   | 'task:blocked'
+  | 'task:unblocked'
+  | 'task:resolved'
   | 'agent:output'
   | 'agent:switched'
   | 'agent:all-limited'
@@ -543,6 +545,34 @@ export interface TaskBlockedEvent extends EngineEventBase {
 }
 
 /**
+ * Task unblocked event - emitted when a blocked task is resolved and removed from blocked state.
+ * This occurs when the user marks a blocked task as done, skips it, or provides an alternative.
+ */
+export interface TaskUnblockedEvent extends EngineEventBase {
+  type: 'task:unblocked';
+  /** The task ID that was unblocked */
+  taskId: string;
+  /** How the blocked task was resolved */
+  resolution: 'done' | 'skip' | 'alternative';
+  /** The operation that was originally blocked */
+  operation: string;
+  /** Message describing what was blocked */
+  message: string;
+}
+
+/**
+ * Task resolved event - emitted when a blocked task's resolution is fully processed.
+ * UI can use this to synchronize its blocked task queue with engine state.
+ */
+export interface TaskResolvedEvent extends EngineEventBase {
+  type: 'task:resolved';
+  /** The task ID that was resolved */
+  taskId: string;
+  /** How the blocked task was resolved */
+  resolution: 'done' | 'skip' | 'alternative';
+}
+
+/**
  * Context for an alternative approach provided by the user.
  * Used when the user wants Claude to try a different method for a blocked task.
  */
@@ -584,6 +614,8 @@ export type EngineEvent =
   | TaskActivatedEvent
   | TaskCompletedEvent
   | TaskBlockedEvent
+  | TaskUnblockedEvent
+  | TaskResolvedEvent
   | AgentOutputEvent
   | AgentSwitchedEvent
   | AllAgentsLimitedEvent

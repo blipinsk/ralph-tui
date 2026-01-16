@@ -646,6 +646,53 @@ export function RunApp({
           setCurrentTaskTitle(undefined);
           break;
 
+        case 'task:unblocked':
+          // Task was unblocked (done, skip, or alternative) - update local task state
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === event.taskId
+                ? {
+                    ...t,
+                    // Clear blocked metadata since task is no longer blocked
+                    metadata: {
+                      ...t.metadata,
+                      blockedOperation: undefined,
+                      blockedMessage: undefined,
+                      blockedCommand: undefined,
+                    },
+                  }
+                : t
+            )
+          );
+          break;
+
+        case 'task:resolved':
+          // Task resolution fully processed - sync blocked queue from engine state
+          // This ensures UI stays in sync even if events were missed or processed out of order
+          setBlockedTaskQueue((prev) => {
+            const engineBlocked = engine.getAllBlockedTasks();
+            // If engine has no blocked tasks, clear the queue and close dialog
+            if (engineBlocked.length === 0) {
+              setShowBlockedDialog(false);
+              setBlockedQueueIndex(0);
+              return [];
+            }
+            // Convert engine format to BlockedOperationInfo format
+            // Preserve task titles from existing queue where available
+            const titleMap = new Map(prev.map((b) => [b.taskId, b.taskTitle]));
+            const newQueue = engineBlocked.map((b) => ({
+              operation: b.operation,
+              message: b.message,
+              blockedCommand: b.blockedCommand,
+              taskId: b.taskId,
+              taskTitle: titleMap.get(b.taskId) ?? b.taskId,
+            }));
+            // Adjust index if we're past the end
+            setBlockedQueueIndex((idx) => Math.min(idx, Math.max(0, newQueue.length - 1)));
+            return newQueue;
+          });
+          break;
+
         case 'agent:output':
           if (event.stream === 'stdout') {
             // Use streaming parser to extract readable content (filters out verbose JSONL)
