@@ -164,9 +164,10 @@ export class RateLimitDetector {
 
     // Check each pattern against stderr only
     for (const { pattern, retryAfterPattern } of patterns) {
-      if (pattern.test(outputToCheck)) {
+      const match = outputToCheck.match(pattern);
+      if (match) {
         // Found a match - extract message and retryAfter
-        const message = this.extractMessage(outputToCheck, pattern);
+        const message = this.extractMessage(outputToCheck, match);
         const retryAfter = retryAfterPattern
           ? this.extractRetryAfter(outputToCheck, retryAfterPattern)
           : undefined;
@@ -211,13 +212,11 @@ export class RateLimitDetector {
 
   /**
    * Extract a relevant message snippet around the matched pattern.
+   *
+   * @param output - The full output string
+   * @param match - The regex match result (passed from detect() to avoid re-matching)
    */
-  private extractMessage(output: string, pattern: RegExp): string {
-    const match = output.match(pattern);
-    if (!match) {
-      return 'Rate limit detected';
-    }
-
+  private extractMessage(output: string, match: RegExpMatchArray): string {
     // Get context around the match
     const matchIndex = match.index ?? 0;
     const start = Math.max(0, matchIndex - 50);
@@ -289,11 +288,9 @@ export class RateLimitDetector {
     ];
 
     for (const pattern of loosePatterns) {
-      if (pattern.test(output)) {
-        const match = output.match(pattern);
-        if (match) {
-          return this.extractMessage(output, pattern);
-        }
+      const match = output.match(pattern);
+      if (match) {
+        return this.extractMessage(output, match);
       }
     }
 

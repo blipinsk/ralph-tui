@@ -153,10 +153,14 @@ export class PermissionDenialDetector {
 
     // Check permission patterns first
     for (const { pattern, operationName, commandPattern } of PERMISSION_PATTERNS) {
-      if (pattern.test(combinedOutput)) {
-        const message = this.extractMessage(combinedOutput, pattern);
+      const match = combinedOutput.match(pattern);
+      if (match) {
+        const message = this.extractMessage(combinedOutput, match);
+        // If commandPattern is the same as pattern, reuse the match result
         const blockedCommand = commandPattern
-          ? this.extractCommand(combinedOutput, commandPattern)
+          ? commandPattern === pattern
+            ? this.extractCommand(match)
+            : this.extractCommand(combinedOutput.match(commandPattern))
           : undefined;
 
         return {
@@ -170,11 +174,12 @@ export class PermissionDenialDetector {
 
     // Check blocked indicators as secondary detection
     for (const pattern of BLOCKED_INDICATORS) {
-      if (pattern.test(combinedOutput)) {
+      const match = combinedOutput.match(pattern);
+      if (match) {
         return {
           isBlocked: true,
           operation: 'blocked operation',
-          message: this.extractMessage(combinedOutput, pattern),
+          message: this.extractMessage(combinedOutput, match),
         };
       }
     }
@@ -184,13 +189,11 @@ export class PermissionDenialDetector {
 
   /**
    * Extract a relevant message snippet around the matched pattern.
+   *
+   * @param output - The full output string
+   * @param match - The regex match result (passed from detect() to avoid re-matching)
    */
-  private extractMessage(output: string, pattern: RegExp): string {
-    const match = output.match(pattern);
-    if (!match) {
-      return 'Permission required';
-    }
-
+  private extractMessage(output: string, match: RegExpMatchArray): string {
     // Get context around the match
     const matchIndex = match.index ?? 0;
     const start = Math.max(0, matchIndex - 20);
@@ -210,10 +213,11 @@ export class PermissionDenialDetector {
   }
 
   /**
-   * Extract the blocked command from the output.
+   * Extract the blocked command from the match result.
+   *
+   * @param match - The regex match result (passed from detect() to avoid re-matching)
    */
-  private extractCommand(output: string, pattern: RegExp): string | undefined {
-    const match = output.match(pattern);
+  private extractCommand(match: RegExpMatchArray | null): string | undefined {
     if (match && match[1]) {
       let command = match[1].trim();
       // Truncate long commands
