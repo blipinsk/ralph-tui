@@ -751,6 +751,18 @@ export class ExecutionEngine {
         // Mark task as completed
         await this.tracker?.completeTask(taskId, 'Manually completed by user');
         this.state.tasksCompleted++;
+
+        // Emit task:completed event so TUI can recalculate dependency status
+        // This allows dependent tasks to become actionable immediately
+        const task = await this.tracker?.getTask(taskId);
+        if (task) {
+          this.emit({
+            type: 'task:completed',
+            timestamp: new Date().toISOString(),
+            task,
+            iteration: this.state.currentIteration,
+          });
+        }
         break;
 
       case 'skip':

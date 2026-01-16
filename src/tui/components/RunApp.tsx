@@ -592,11 +592,14 @@ export function RunApp({
           break;
 
         case 'task:completed':
-          setTasks((prev) =>
-            prev.map((t) =>
+          // Update completed task status AND recalculate dependency status for all tasks
+          // This ensures dependent tasks transition from 'blocked' to 'actionable'
+          setTasks((prev) => {
+            const updated = prev.map((t) =>
               t.id === event.task.id ? { ...t, status: 'done' as TaskStatus } : t
-            )
-          );
+            );
+            return recalculateDependencyStatus(updated);
+          });
           break;
 
         case 'task:blocked':
