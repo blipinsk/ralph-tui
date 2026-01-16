@@ -144,7 +144,7 @@ export function BlockedTaskDialog({
         {/* Title bar with queue position */}
         <box style={{ marginBottom: 1, flexDirection: 'row', justifyContent: 'space-between' }}>
           <text fg={colors.status.warning}>
-            {'⊘ Blocked Operation'}
+            {'[BLOCKED] Operation'}
           </text>
           {showQueueNav && (
             <text fg={colors.fg.muted}>

@@ -116,7 +116,7 @@ export function AlternativeApproachInput({
         {/* Title */}
         <box style={{ marginBottom: 1 }}>
           <text fg={colors.accent.primary}>
-            {'💡 Suggest Alternative Approach'}
+            {'[TIP] Suggest Alternative Approach'}
           </text>
         </box>
 
