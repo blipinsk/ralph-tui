@@ -203,9 +203,11 @@ export type EngineEventType =
   | 'iteration:retrying'
   | 'iteration:skipped'
   | 'iteration:rate-limited'
+  | 'iteration:blocked'
   | 'task:selected'
   | 'task:activated'
   | 'task:completed'
+  | 'task:blocked'
   | 'agent:output'
   | 'agent:switched'
   | 'agent:all-limited'
@@ -503,6 +505,42 @@ export interface TasksRefreshedEvent extends EngineEventBase {
 }
 
 /**
+ * Iteration blocked event - emitted when an iteration is blocked due to permission denial.
+ * The task requires manual intervention to continue.
+ */
+export interface IterationBlockedEvent extends EngineEventBase {
+  type: 'iteration:blocked';
+  /** Iteration number */
+  iteration: number;
+  /** Task that was blocked */
+  task: TrackerTask;
+  /** The operation that was blocked (e.g., 'git commit', 'file modification') */
+  operation: string;
+  /** Human-readable message describing the blocked operation */
+  message: string;
+  /** The specific command that was blocked (if available) */
+  blockedCommand?: string;
+}
+
+/**
+ * Task blocked event - emitted when a task transitions to blocked status.
+ * Indicates that the task requires user intervention (done, skip, or alternative).
+ */
+export interface TaskBlockedEvent extends EngineEventBase {
+  type: 'task:blocked';
+  /** Blocked task */
+  task: TrackerTask;
+  /** Iteration where the block occurred */
+  iteration: number;
+  /** The operation that caused the block */
+  operation: string;
+  /** Human-readable message describing why the task is blocked */
+  message: string;
+  /** The specific command that was blocked (if available) */
+  blockedCommand?: string;
+}
+
+/**
  * Union of all engine events
  */
 export type EngineEvent =
@@ -518,9 +556,11 @@ export type EngineEvent =
   | IterationRetryingEvent
   | IterationSkippedEvent
   | IterationRateLimitedEvent
+  | IterationBlockedEvent
   | TaskSelectedEvent
   | TaskActivatedEvent
   | TaskCompletedEvent
+  | TaskBlockedEvent
   | AgentOutputEvent
   | AgentSwitchedEvent
   | AllAgentsLimitedEvent

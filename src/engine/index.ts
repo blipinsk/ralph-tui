@@ -17,16 +17,19 @@ import type {
   EngineSubagentState,
   ErrorHandlingConfig,
   ErrorHandlingStrategy,
+  IterationBlockedEvent,
   IterationResult,
   IterationStatus,
   IterationRateLimitedEvent,
   RateLimitState,
   SubagentTreeNode,
+  TaskBlockedEvent,
 } from './types.js';
 import { toEngineSubagentState } from './types.js';
 import type { RalphConfig, RateLimitHandlingConfig } from '../config/types.js';
 import { DEFAULT_RATE_LIMIT_HANDLING } from '../config/types.js';
 import { RateLimitDetector, type RateLimitDetectionResult } from './rate-limit-detector.js';
+import { PermissionDenialDetector, type PermissionDenialResult } from './permission-denial-detector.js';
 import type { TrackerPlugin, TrackerTask } from '../plugins/trackers/types.js';
 import type { AgentPlugin, AgentExecutionHandle } from '../plugins/agents/types.js';
 import { getAgentRegistry } from '../plugins/agents/registry.js';
@@ -115,6 +118,10 @@ export class ExecutionEngine {
   private subagentParser: SubagentTraceParser;
   /** Rate limit detector for parsing agent output */
   private rateLimitDetector: RateLimitDetector;
+  /** Permission denial detector for detecting blocked operations */
+  private permissionDenialDetector: PermissionDenialDetector;
+  /** Track blocked tasks that require user intervention */
+  private blockedTasks: Map<string, { operation: string; message: string; blockedCommand?: string }> = new Map();
   /** Track rate limit retry attempts per task (separate from generic retries) */
   private rateLimitRetryMap: Map<string, number> = new Map();
   /** Rate limit handling configuration */
@@ -151,6 +158,9 @@ export class ExecutionEngine {
 
     // Initialize rate limit detector
     this.rateLimitDetector = new RateLimitDetector();
+
+    // Initialize permission denial detector
+    this.permissionDenialDetector = new PermissionDenialDetector();
 
     // Get rate limit handling config from agent config or use defaults
     const agentRateLimitConfig = this.config.agent.rateLimitHandling;
@@ -597,6 +607,76 @@ export class ExecutionEngine {
   }
 
   /**
+   * Check agent output for permission denial conditions.
+   * Returns detection result if permission denial is detected.
+   */
+  private checkForPermissionDenial(
+    stdout: string,
+    stderr: string,
+    exitCode?: number
+  ): PermissionDenialResult {
+    return this.permissionDenialDetector.detect({
+      stdout,
+      stderr,
+      exitCode,
+      agentId: this.config.agent.plugin,
+    });
+  }
+
+  /**
+   * Resolve a blocked task with user action.
+   * Called when user chooses 'done', 'skip', or provides an alternative.
+   *
+   * @param taskId - The blocked task ID
+   * @param action - The action to take: 'done' marks complete, 'skip' skips the task, 'retry' tries again
+   * @returns true if action was successful
+   */
+  async resolveBlockedTask(taskId: string, action: 'done' | 'skip' | 'retry'): Promise<boolean> {
+    const blockedInfo = this.blockedTasks.get(taskId);
+    if (!blockedInfo) {
+      return false;
+    }
+
+    // Remove from blocked tracking
+    this.blockedTasks.delete(taskId);
+
+    switch (action) {
+      case 'done':
+        // Mark task as completed
+        await this.tracker?.completeTask(taskId, 'Manually completed by user');
+        this.state.tasksCompleted++;
+        break;
+
+      case 'skip':
+        // Skip the task
+        this.skippedTasks.add(taskId);
+        await this.tracker?.updateTaskStatus(taskId, 'cancelled');
+        break;
+
+      case 'retry':
+        // Reset to open status for retry
+        await this.tracker?.updateTaskStatus(taskId, 'open');
+        break;
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a task is currently blocked.
+   */
+  isTaskBlocked(taskId: string): boolean {
+    return this.blockedTasks.has(taskId);
+  }
+
+  /**
+   * Get blocked task info.
+   */
+  getBlockedTaskInfo(taskId: string): { operation: string; message: string; blockedCommand?: string } | undefined {
+    return this.blockedTasks.get(taskId);
+  }
+
+  /**
    * Handle rate limit with exponential backoff retry.
    * Returns true if retry should be attempted, false if max retries exceeded.
    *
@@ -862,6 +942,68 @@ export class ExecutionEngine {
 
       // Clear rate limit retry count on successful execution (no rate limit)
       this.clearRateLimitRetryCount(task.id);
+
+      // Check for permission denial before processing result
+      const permissionResult = this.checkForPermissionDenial(
+        agentResult.stdout,
+        agentResult.stderr,
+        agentResult.exitCode
+      );
+
+      if (permissionResult.isBlocked) {
+        // Task is blocked waiting for permission
+        const endedAt = new Date();
+
+        // Track the blocked task
+        this.blockedTasks.set(task.id, {
+          operation: permissionResult.operation ?? 'unknown operation',
+          message: permissionResult.message ?? 'Permission required',
+          blockedCommand: permissionResult.blockedCommand,
+        });
+
+        // Update tracker to blocked status
+        await this.tracker!.updateTaskStatus(task.id, 'blocked');
+
+        // Emit iteration:blocked event
+        const blockedEvent: IterationBlockedEvent = {
+          type: 'iteration:blocked',
+          timestamp: endedAt.toISOString(),
+          iteration,
+          task,
+          operation: permissionResult.operation ?? 'unknown operation',
+          message: permissionResult.message ?? 'Permission required',
+          blockedCommand: permissionResult.blockedCommand,
+        };
+        this.emit(blockedEvent);
+
+        // Emit task:blocked event
+        const taskBlockedEvent: TaskBlockedEvent = {
+          type: 'task:blocked',
+          timestamp: endedAt.toISOString(),
+          task,
+          iteration,
+          operation: permissionResult.operation ?? 'unknown operation',
+          message: permissionResult.message ?? 'Permission required',
+          blockedCommand: permissionResult.blockedCommand,
+        };
+        this.emit(taskBlockedEvent);
+
+        // Pause the engine - user intervention required
+        this.pause();
+
+        // Return as failed with blocked status
+        return {
+          iteration,
+          status: 'failed',
+          task,
+          taskCompleted: false,
+          promiseComplete: false,
+          durationMs: endedAt.getTime() - startedAt.getTime(),
+          error: `Blocked: ${permissionResult.message ?? 'Permission required'}`,
+          startedAt: startedAt.toISOString(),
+          endedAt: endedAt.toISOString(),
+        };
+      }
 
       const endedAt = new Date();
       const durationMs = endedAt.getTime() - startedAt.getTime();
@@ -1713,11 +1855,13 @@ export type {
   EngineSubagentState,
   ErrorHandlingConfig,
   ErrorHandlingStrategy,
+  IterationBlockedEvent,
   IterationRateLimitedEvent,
   IterationResult,
   IterationStatus,
   RateLimitState,
   SubagentTreeNode,
+  TaskBlockedEvent,
 };
 
 // Re-export rate limit detector
@@ -1726,3 +1870,10 @@ export {
   type RateLimitDetectionResult,
   type RateLimitDetectionInput,
 } from './rate-limit-detector.js';
+
+// Re-export permission denial detector
+export {
+  PermissionDenialDetector,
+  type PermissionDenialResult,
+  type PermissionDenialInput,
+} from './permission-denial-detector.js';

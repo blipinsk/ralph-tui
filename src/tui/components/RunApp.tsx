@@ -585,6 +585,33 @@ export function RunApp({
           );
           break;
 
+        case 'task:blocked':
+          // Task is blocked due to permission denial - requires user intervention
+          setTasks((prev) =>
+            prev.map((t) =>
+              t.id === event.task.id
+                ? {
+                    ...t,
+                    status: 'blocked' as TaskStatus,
+                    // Store blocking info for display
+                    metadata: {
+                      ...t.metadata,
+                      blockedOperation: event.operation,
+                      blockedMessage: event.message,
+                      blockedCommand: event.blockedCommand,
+                    },
+                  }
+                : t
+            )
+          );
+          break;
+
+        case 'iteration:blocked':
+          // Iteration was blocked - clear current task info and update display
+          setCurrentTaskId(undefined);
+          setCurrentTaskTitle(undefined);
+          break;
+
         case 'agent:output':
           if (event.stream === 'stdout') {
             // Use streaming parser to extract readable content (filters out verbose JSONL)

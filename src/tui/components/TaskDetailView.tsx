@@ -353,6 +353,45 @@ export function TaskDetailView({ task, onBack: _onBack }: TaskDetailViewProps): 
           </box>
         )}
 
+        {/* Blocked operation section - shown when task is blocked due to permission denial */}
+        {task.status === 'blocked' && (() => {
+          const blockedOp = task.metadata?.blockedOperation;
+          const blockedMsg = task.metadata?.blockedMessage;
+          const blockedCmd = task.metadata?.blockedCommand;
+          return (
+            <box style={{ marginBottom: 2 }}>
+              <SectionHeader title="⊘ Blocked Operation" />
+              <box
+                style={{
+                  padding: 1,
+                  backgroundColor: colors.bg.secondary,
+                  border: true,
+                  borderColor: colors.status.error,
+                  flexDirection: 'column',
+                }}
+              >
+                {typeof blockedOp === 'string' && blockedOp ? (
+                  <text fg={colors.status.error}>Operation: {blockedOp}</text>
+                ) : (
+                  <text fg={colors.status.error}>Task is blocked and requires user intervention</text>
+                )}
+                {typeof blockedMsg === 'string' && blockedMsg && (
+                  <text fg={colors.fg.secondary}>{blockedMsg}</text>
+                )}
+                {typeof blockedCmd === 'string' && blockedCmd && (
+                  <box style={{ marginTop: 1 }}>
+                    <text fg={colors.fg.muted}>Command:</text>
+                    <text fg={colors.accent.tertiary}>{'  '}{blockedCmd}</text>
+                  </box>
+                )}
+                <box style={{ marginTop: 1 }}>
+                  <text fg={colors.fg.dim}>User action required: done (d), skip (x), or retry (r)</text>
+                </box>
+              </box>
+            </box>
+          );
+        })()}
+
         {/* Completion notes section */}
         {task.closeReason && (
           <box style={{ marginBottom: 2 }}>
